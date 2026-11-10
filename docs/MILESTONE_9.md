@@ -16,6 +16,12 @@ FX limitations: this is not an IAS 21-compliant multi-currency subledger. No per
 
 **5. QuickBooks inventory catalog mapping.** The QuickBooks source normalizer retains item SKU, name, source type, original quantity on hand, purchase cost and asset account reference. An accountant-approved batch imports only validated inventory SKUs, preserving a source-to-target crosswalk. It **does not automatically post stock balances** or invent FIFO source lots from a QBO snapshot. Historical inventory valuation must be reconciled to source inventory reports. The `register_inventory_opening_lots` workflow accepts costed opening lots **only after** the one-time opening-balance journal has already debited Inventory Asset for the identical total cost. This registers quantities without double-posting that asset.
 
+## QBO inventory financial cutover guard
+
+In addition to mapping source QBO inventory `Item` records to new SKUs, a migration readiness query now checks: (1) all inventory source IDs are mapped, and (2) every source item reporting positive quantity on hand has a matching total quantity of opening inventory lots. The system rejects final six-control financial cutover approval while either check fails. Opening lots must reconcile exactly to an existing Inventory Asset opening journal to prevent double-recognition of asset value.
+
+The cutover controls are not a replacement for a CPA-reviewed source valuation report, completeness review of historical transactions, proper inventory cost methods, inventory returns, or tax assessment.
+
 ## Deployment
 
 Apply following all merged Milestone 1–8 migrations, ordered by filename:
@@ -25,6 +31,7 @@ Apply following all merged Milestone 1–8 migrations, ordered by filename:
 - `20261110360000_fx_settlements.sql`
 - `20261110370000_provincial_tax_preview.sql`
 - `20261110380000_inventory_migration_opening.sql`
+- `20261110390000_inventory_cutover_guard.sql`
 
 The Advanced Accounting workspace includes Inventory, Vendor Advances, Foreign Currency and Provincial Tax Estimate views, in addition to previous accounting workflows. The QuickBooks migration workspace includes safe inventory SKU import. These features require the existing Supabase account/tenant setup and valid open fiscal periods.
 
