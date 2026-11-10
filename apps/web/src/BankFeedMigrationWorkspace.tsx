@@ -5,6 +5,7 @@ type Props={organizationId:string;role:string;notify:(message:string,error?:bool
 type FeedAccount={connection_id:string;feed_account_id:string;provider_account_id:string;account_name:string;ledger_account_id:string|null;status:string;last_synced_at:string|null}
 type FeedRow={id:string;feed_account_id:string;description:string;booking_date:string;amount:number;pending:boolean;removed:boolean}
 type LedgerAccount={id:string;code:string;name:string;is_bank_account:boolean}
+type Statement={id:string;bank_account_id:string;start_date:string;end_date:string;status:string}
 type Migration={id:string;state:string;source_system:string;source_company_id:string|null;created_at:string}
 type Qbo={realm_id:string;status:string;connected_at:string}
 const types=['Account','Customer','Vendor','TaxCode','Invoice','Bill','CreditMemo','VendorCredit',
@@ -48,6 +49,9 @@ export default function BankFeedMigrationWorkspace({organizationId,role,notify}:
  const [overview,setOverview]=useState<FeedAccount[]>([])
  const [transactions,setTransactions]=useState<FeedRow[]>([])
  const [accounts,setAccounts]=useState<LedgerAccount[]>([])
+ const [statements,setStatements]=useState<Statement[]>([])
+ const [selectedStatement,setSelectedStatement]=useState('')
+ const [selectedFeedIds,setSelectedFeedIds]=useState<string[]>([])
  const [connections,setConnections]=useState<Qbo[]>([])
  const [batches,setBatches]=useState<Migration[]>([])
  const [selectedBatch,setSelectedBatch]=useState('')
@@ -60,19 +64,21 @@ export default function BankFeedMigrationWorkspace({organizationId,role,notify}:
  const canManage=['owner','administrator','accountant'].includes(role)
  const load=useCallback(async()=>{
   if(!supabase||!organizationId)return
-  const [f,t,a,q,b]=await Promise.all([
+  const [f,t,a,q,b,st]=await Promise.all([
    supabase.rpc('bank_feed_overview',{p_org:organizationId}),
    supabase.from('bank_feed_transactions').select('id,feed_account_id,description,booking_date,amount,pending,removed')
     .eq('organization_id',organizationId).order('booking_date',{ascending:false}).limit(100),
    supabase.from('accounts').select('id,code,name,is_bank_account').eq('organization_id',organizationId).eq('is_bank_account',true),
    supabase.rpc('qbo_connection_overview',{p_org:organizationId}),
    supabase.from('migration_batches').select('id,state,source_system,source_company_id,created_at')
-    .eq('organization_id',organizationId).order('created_at',{ascending:false}).limit(40)
+    .eq('organization_id',organizationId).order('created_at',{ascending:false}).limit(40),
+   supabase.from('bank_statements').select('id,bank_account_id,start_date,end_date,status')
+    .eq('organization_id',organizationId).eq('status','open').order('end_date',{ascending:false}).limit(100)
   ])
-  for(const result of [f,t,a,q,b])if(result.error)throw result.error
+  for(const result of [f,t,a,q,b,st])if(result.error)throw result.error
   setOverview((f.data||[]) as FeedAccount[]);setTransactions((t.data||[]) as FeedRow[])
   setAccounts((a.data||[]) as LedgerAccount[]);setConnections((q.data||[]) as Qbo[])
-  setBatches((b.data||[]) as Migration[])
+  setBatches((b.data||[]) as Migration[]);setStatements((st.data||[]) as Statement[])
  },[organizationId])
  useEffect(()=>{setReport(null);setBatches([]);setOverview([]);void load().catch(e=>notify(e.message,true))},[load])
  const run=(work:()=>Promise<void>)=>{setBusy(true);void work().catch(e=>notify(
@@ -94,6 +100,14 @@ export default function BankFeedMigrationWorkspace({organizationId,role,notify}:
  const synchronize=(connectionId:string)=>run(async()=>{
   const result=await callApi('/bank-feeds/sync',{organizationId,connectionId})
   await load();notify('Feed synchronized: '+result.updated+' updated, '+result.removed+' removed.')
+ })
+ const promote=()=>run(async()=>{
+  if(!supabase||!selectedStatement||!selectedFeedIds.length)throw new Error('Select a statement and posted feed rows')
+  const {data,error}=await supabase.rpc('promote_bank_feed_transactions',{
+   p_org:organizationId,p_statement:selectedStatement,p_feed_transaction_ids:selectedFeedIds})
+  if(error)throw error
+  setSelectedFeedIds([]);await load()
+  notify(Number(data?.imported||0)+' feed transactions staged for review in Bank reconciliation.')
  })
  const disconnect=(connectionId:string)=>run(async()=>{
   if(!window.confirm('Disconnect this institution? Imported staging records remain for audit.'))return
@@ -209,8 +223,13 @@ export default function BankFeedMigrationWorkspace({organizationId,role,notify}:
     </tr>)}</tbody></table></div>
    </div>
    <div className="card"><div className="card-head"><h2>Imported transaction staging</h2></div>
-    <div className="table-wrap"><table><thead><tr><th>Date</th><th>Description</th><th>Amount (CAD)</th><th>State</th></tr></thead>
-    <tbody>{transactions.map(t=><tr key={t.id}><td>{t.booking_date}</td><td>{t.description}</td>
+    <div className="workspace-fields" style={{padding:'14px'}}>
+     <label>Open bank statement<select value={selectedStatement} onChange={e=>{setSelectedStatement(e.target.value);setSelectedFeedIds([])}}><option value="">Choose statement</option>{statements.map(st=><option key={st.id} value={st.id}>{st.start_date} to {st.end_date} · {accounts.find(a=>a.id===st.bank_account_id)?.name||'Bank'}</option>)}</select></label>
+     <button className="primary" disabled={!canManage||busy||!selectedStatement||!selectedFeedIds.length} onClick={promote}>Stage selected rows ({selectedFeedIds.length})</button>
+    </div>
+    <div className="table-wrap"><table><thead><tr><th>Select</th><th>Date</th><th>Description</th><th>Amount (CAD)</th><th>State</th></tr></thead>
+    <tbody>{transactions.map(t=><tr key={t.id}><td><input type="checkbox" disabled={t.pending||t.removed||!selectedStatement||!canManage}
+    checked={selectedFeedIds.includes(t.id)} onChange={e=>setSelectedFeedIds(prev=>e.target.checked?[...prev,t.id]:prev.filter(x=>x!==t.id))}/></td><td>{t.booking_date}</td><td>{t.description}</td>
      <td>{money(t.amount)}</td><td>{t.removed?'Removed by bank':t.pending?'Pending':'Posted at bank, unmatched'}</td></tr>)}
     </tbody></table></div><p>Bank feed staging does not alter the general ledger.</p>
    </div>
