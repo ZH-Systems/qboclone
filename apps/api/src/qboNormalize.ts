@@ -66,7 +66,15 @@ export function normalizeQbo(type:QboType,source:Record<string,unknown>):{
    original_number:source.DocNumber,
    total:source.TotalAmt,lines:lines(source)}}
  }
- if(type==='Payment'||type==='BillPayment')return {kind:type==='Payment'?'payment':'bill_payment',record:base}
+ if(type==='Payment'||type==='BillPayment'){
+  const allocations=(Array.isArray(source.Line)?source.Line:[]).flatMap(rawLine=>{
+   const row=rawLine as Record<string,unknown>,linked=Array.isArray(row.LinkedTxn)?row.LinkedTxn:[]
+   return linked.map(link=>({source_document_id:id((link as Record<string,unknown>).TxnId),
+     amount:Number(row.Amount||0)}))
+  })
+  return {kind:type==='Payment'?'payment':'bill_payment',record:{...base,
+   payment_date:val(source.TxnDate),total:source.TotalAmt,allocations}}
+ }
  if(type==='JournalEntry')return {kind:'journal',record:{...base,
   date:val(source.TxnDate),lines:Array.isArray(source.Line)?source.Line:[],
   qbo_raw_journal:true}}
