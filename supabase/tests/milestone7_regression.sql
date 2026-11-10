@@ -79,4 +79,11 @@ begin
  raise notice 'MILESTONE 7 REGRESSION PASS';
 end $qa$;
 reset role;
+do $qa$
+begin
+ if private.recurring_next_month('2026-01-31',31)<>'2026-02-28'::date or
+  private.recurring_next_month('2026-02-28',31)<>'2026-03-31'::date or
+  private.recurring_next_month('2028-01-31',31)<>'2028-02-29'::date then
+  raise exception 'End-of-month recurring dates are not anchored';end if;
+end $qa$;
 rollback;
