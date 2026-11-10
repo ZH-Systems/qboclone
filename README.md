@@ -24,12 +24,13 @@ See the [architecture](docs/ARCHITECTURE.md) and [operational readiness](docs/MI
 1. Create a Supabase project intended for development only.
 2. Apply **all** migrations in `supabase/migrations` in filename order to a disposable development Supabase project. Do not apply just the initial migration.
 3. Enable email/password authentication under Supabase Auth.
-4. Copy `.env.example` to `apps/web/.env.local` and fill `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`.
+4. Copy `.env.example` to `apps/web/.env.local` and configure `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, and `VITE_BILLING_API_URL`. Copy `apps/api/.env.example` to `apps/api/.env` for the dedicated API and configure **server-only** development credentials.
 5. From the repository root, run:
 
 ```bash
 npm install
-npm run dev
+npm run api:dev  # separate terminal, Fastify on localhost:3000
+npm run dev      # React/Vite frontend
 ```
 
 Run checks with:
@@ -42,19 +43,19 @@ The Vite development server exposes the web app locally. Only the Supabase **pub
 
 ## Vercel deployment
 
-Import this repository as a Vercel project. Set Root Directory to `apps/web`, Framework Preset to Vite, Build Command to `npm run build`, and Output Directory to `dist`. Set the two `VITE_` environment variables in the Vercel dashboard. Deploy once the database migration has run.
+Import this repository as a Vercel project. Set Root Directory to `apps/web`, Framework Preset to Vite, Build Command to `npm run build`, and Output Directory to `dist`. Configure **all three** public `VITE_` environment variables in Vercel, including the HTTPS dedicated API origin. Deploy the Fastify API separately using [`Dockerfile.api`](Dockerfile.api), apply the **full ordered** database migration chain, and complete [staging acceptance](docs/MILESTONE_10.md) before any real financial data.
 
 ## Milestone 2: Financial document foundation
 
 Milestone 2 adds customer/vendor records, invoice and bill drafts/posting, source-linked credits, partial payments, independent posting idempotency namespaces, manual journal reversals, fiscal-period controls, and ledger-backed trial balance / P&L / balance-sheet summaries. See [Milestone 2 specification and QA acceptance tests](docs/MILESTONE_2.md).
 
-Do **not** apply migration 2 or use financial data in production until the migrations, permission policies and accounting assertions have been validated in a test Supabase instance.
+The Milestone 2 migrations are part of the ordered migration chain. All current milestones' SQL regressions run in CI, but production requires separately verified Supabase staging and CPA acceptance.
 
 ## Milestone 3: Tax snapshots and bank reconciliation
 
 Milestone 3 implements tenant-defined tax codes and tax snapshots, configurable document posting accounts, draft editing/voiding, bank statement CSV staging, journal matching, and controlled reconciliation. See [the Milestone 3 documentation](docs/MILESTONE_3.md).
 
-**Do not** treat the current tax configuration as a validated CRA compliance system or use it for production filings. The new migrations and tests must run in development first.
+**Do not** treat the current tax configuration as a validated CRA compliance system or use it for production filings. The current migration suite must run in staging with real Supabase RLS before production approval.
 
 ## Milestone 4: SaaS billing and organization administration
 
@@ -80,7 +81,7 @@ Milestone 5 adds server-enforced bank import quotas, Resend invitation emails, a
 - [Milestone 5 implementation and validation](docs/MILESTONE_5.md)
 - [Operations and recovery runbook](docs/OPERATIONS_RUNBOOK.md)
 
-The production deployment requires configured Supabase Auth, Resend and Stripe test-mode integrations. CI validates PostgreSQL and application code but does not substitute for an actual Supabase/Stripe/Resend integration test or regulatory review.
+Production acceptance requires real Supabase Auth and Resend verification, plus Stripe test-mode acceptance before separately configuring live Stripe. CI validates PostgreSQL and application code but does not substitute for an actual Supabase/Stripe/Resend integration test or regulatory review.
 
 ## Milestone 6: Advanced accounting and Canadian GST/HST
 
@@ -105,7 +106,7 @@ Milestone 7 adds recurring invoice/bill draft generation, opt-in overdue reminde
 
 Review [Milestone 8 implementation and launch blockers](docs/MILESTONE_8.md).
 
-**Source archival is not complete semantic accounting conversion.** Unsupported credits, payroll, inventory, historical journal treatment, attachments and special taxes require further mapping and verification. No production bank connections or commercial launch are authorized by the CI suite alone.
+**Source archival is not complete semantic accounting conversion.** Unapplied credits, payroll, complex inventory/FX cases, some historical journal treatment, attachments and special taxes require further mapping and verification. Milestone 9 added reviewed FIFO inventory and standalone journal flows, not blanket QuickBooks parity. No production bank connections or commercial launch are authorized by the CI suite alone.
 
 ## Milestone 9: Accounting feature completion
 
@@ -115,7 +116,7 @@ Milestone 9 adds accountant-controlled FIFO inventory and COGS, supplier advance
 
 ## Milestone 10: Production integration and security
 
-Milestone 10 establishes deployment packaging, fail-closed production configuration, atomic provider OAuth/Link-session consumption, staging smoke tests, a provider readiness matrix, and explicit acceptance and incident-response documentation. See [Milestone 10 deployment and security runbook](docs/MILESTONE_10.md).
+Milestone 10 establishes deployment packaging, fail-closed production configuration, atomic provider OAuth/Link-session consumption, signed Plaid webhooks and consent renewal, real staging smoke tests, a provider readiness matrix, and explicit acceptance and incident-response documentation. See [Milestone 10 deployment and security runbook](docs/MILESTONE_10.md).
 
 **Engineering implementation is not evidence of production verification.** Protected GitHub Environment approvals and external tests remain mandatory. Never set readiness attestations to `true` merely because CI passes.
 
