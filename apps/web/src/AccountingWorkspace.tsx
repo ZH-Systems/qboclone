@@ -13,17 +13,17 @@ type Document = {
 type Payment = { document_id: string; amount: number }
 type AccountBalance = { account_id: string; account_code: string; account_name: string; account_type: string; total_debits: number; total_credits: number; net_debit: number }
 type ProfitLine = { account_code: string; account_name: string; account_type: string; amount: number }
-type Row = { description: string; quantity: string; unit_price: string; tax_rate_bps: string }
+export type Row = { description: string; quantity: string; unit_price: string; tax_rate_bps: string }
 export type WorkspaceTab = 'contacts' | 'sales' | 'purchases' | 'reports'
 type Props = { orgId: string; tab: WorkspaceTab; notify: (message: string, isError?: boolean) => void }
 const day = () => new Date().toLocaleDateString('sv-SE', {timeZone:'America/Toronto'})
 const money = (value: number | string) => formatMoney(Math.round(Number(value) * 100))
 const lineDefaults = (): Row[] => [{description:'',quantity:'1',unit_price:'0.00',tax_rate_bps:'0'}]
-function validRate(text: string) {
+export function validRate(text: string) {
   if (!/^\d+$/.test(text) || Number(text)>2500) throw new Error('Enter tax rate in basis points (0 to 2500).')
   return Number(text)
 }
-function totalLines(lines: Row[]) {
+export function totalLines(lines: Row[]) {
   return lines.reduce((sum, line) => {
     const quantity = Number(line.quantity)
     if (!/^(0|[1-9]\d*)(\.\d{1,3})?$/.test(line.quantity) || quantity<=0 || quantity>1000000) throw new Error('Quantity requires up to three decimals.')
