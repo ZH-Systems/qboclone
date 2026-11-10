@@ -104,7 +104,7 @@ Review [Milestone 8 implementation and launch blockers](docs/MILESTONE_8.md).
 
 ## Milestone 9: Accounting feature completion
 
-Milestone 9 adds accountant-controlled FIFO inventory and COGS, supplier advances, CAD-based foreign-currency settlement, standard provincial sales-tax reference previews, and safe QuickBooks inventory SKU mapping without auto-posting stock valuation. See [Milestone 9 scope, deployment and limitations](docs/MILESTONE_9.md).
+Milestone 9 adds accountant-controlled FIFO inventory and COGS, supplier advances, CAD-based foreign-currency settlement, standard provincial sales-tax reference previews, and safe QuickBooks inventory SKU mapping and optional opening FIFO lots verified against an existing asset balance (without double posting). See [Milestone 9 scope, deployment and limitations](docs/MILESTONE_9.md).
 
 **Not complete statutory parity:** multi-currency revaluation, full provincial tax calculation/filing, inventory returns and adjustment workflows, full historical stock valuation and payroll migration remain incomplete.
 
