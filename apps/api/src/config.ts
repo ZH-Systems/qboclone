@@ -3,7 +3,10 @@ export type ServerConfig={
   webhookSecret:string; webOrigin:string; port:number;
   emailApiKey:string|null; emailFrom:string|null;
   trustedProxyCidrs:string[]|false;
-  googleVisionApiKey:string|null; workerSecret:string|null
+  googleVisionApiKey:string|null; workerSecret:string|null;
+  plaidClientId:string|null;plaidSecret:string|null;plaidEnv:'sandbox'|'development'|'production';
+  bankTokenEncryptionKey:string|null;qboClientId:string|null;qboClientSecret:string|null;
+  qboRedirectUri:string|null;qboSandbox:boolean
 }
 export function readConfig(env:NodeJS.ProcessEnv=process.env):ServerConfig{
   const required=(key:string)=>{const value=env[key]?.trim();if(!value)throw new Error('Missing server environment variable: '+key);return value}
@@ -21,5 +24,10 @@ export function readConfig(env:NodeJS.ProcessEnv=process.env):ServerConfig{
     emailApiKey:env.RESEND_API_KEY?.trim()||null,emailFrom:env.INVITATION_EMAIL_FROM?.trim()||null,
     trustedProxyCidrs:env.TRUSTED_PROXY_CIDRS?.trim()?.split(',').map(x=>x.trim()).filter(Boolean)||false,
     googleVisionApiKey:env.GOOGLE_VISION_API_KEY?.trim()||null,
-    workerSecret:env.AUTOMATION_WORKER_SECRET?.trim()||null}
+    workerSecret:env.AUTOMATION_WORKER_SECRET?.trim()||null,
+    plaidClientId:env.PLAID_CLIENT_ID?.trim()||null,plaidSecret:env.PLAID_SECRET?.trim()||null,
+    plaidEnv:env.PLAID_ENV==='production'?'production':env.PLAID_ENV==='development'?'development':'sandbox',
+    bankTokenEncryptionKey:env.BANK_TOKEN_ENCRYPTION_KEY?.trim()||null,
+    qboClientId:env.QBO_CLIENT_ID?.trim()||null,qboClientSecret:env.QBO_CLIENT_SECRET?.trim()||null,
+    qboRedirectUri:env.QBO_REDIRECT_URI?.trim()||null,qboSandbox:env.QBO_SANDBOX!=='false'}
 }
