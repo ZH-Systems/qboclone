@@ -110,6 +110,10 @@ begin
  begin perform public.unmatch_bank_transaction(org_a,tx_id);
  exception when others then failed:=true;end;
  if not failed then raise exception 'FAIL reconciled bank unmatch';end if;
+ failed:=false;
+ begin perform public.reset_open_bank_statement(org_a,stmt);
+ exception when others then failed:=true;end;
+ if not failed then raise exception 'FAIL reset of closed bank statement';end if;
 
  -- Whole-ledger trial balance after all test postings.
  select sum(total_debits),sum(total_credits) into sum_debit,sum_credit
