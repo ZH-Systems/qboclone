@@ -1,0 +1,27 @@
+name: Milestone 10 staging security acceptance
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  staging:
+    runs-on: ubuntu-latest
+    environment: staging
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --no-audit --no-fund
+      - run: npm run verify
+      - name: Probe real staging API and RLS with two synthetic tenants
+        env:
+          STAGING_API_URL: ${{ secrets.QBOCLONE_STAGING_API_URL }}
+          STAGING_SUPABASE_URL: ${{ secrets.QBOCLONE_STAGING_SUPABASE_URL }}
+          STAGING_SUPABASE_ANON_KEY: ${{ secrets.QBOCLONE_STAGING_SUPABASE_ANON_KEY }}
+          STAGING_ORG_A: ${{ secrets.QBOCLONE_STAGING_ORG_A }}
+          STAGING_ORG_B: ${{ secrets.QBOCLONE_STAGING_ORG_B }}
+          STAGING_TEST_JWT_A: ${{ secrets.QBOCLONE_STAGING_TEST_JWT_A }}
+          STAGING_TEST_JWT_B: ${{ secrets.QBOCLONE_STAGING_TEST_JWT_B }}
+        run: node scripts/staging-smoke.mjs

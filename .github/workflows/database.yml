@@ -77,6 +77,8 @@ jobs:
         run: psql -X -v ON_ERROR_STOP=1 -f supabase/tests/milestone9_inventory_opening_regression.sql
       - name: Run Milestone 9 inventory cutover gate regression
         run: psql -X -v ON_ERROR_STOP=1 -f supabase/tests/milestone9_inventory_cutover_regression.sql
+      - name: Run Milestone 10 provider authorization claim regression
+        run: psql -X -v ON_ERROR_STOP=1 -f supabase/tests/milestone10_provider_claims_regression.sql
       - name: Verify database backup and disaster recovery restore
         shell: bash
         run: |

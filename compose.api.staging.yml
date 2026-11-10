@@ -1,0 +1,27 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    image: qboclone-api:staging
+    # TLS terminates at a trusted reverse proxy. Never publish directly to WAN.
+    ports:
+      - "127.0.0.1:3000:3000"
+    env_file:
+      - path: ./apps/api/.env.staging
+        required: true
+    environment:
+      NODE_ENV: production
+      DEPLOYMENT_ENV: staging
+      PORT: "3000"
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 200
+    mem_limit: 768m
+    restart: unless-stopped
+    stop_grace_period: 30s

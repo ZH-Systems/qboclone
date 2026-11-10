@@ -16,7 +16,18 @@ import {requireOwner,resolvePrice,subscriptionOrganization,subscriptionPrice,pay
 const config=readConfig()
 const stripe=new Stripe(config.stripeKey)
 const db=createClient(config.supabaseUrl,config.serviceRoleKey,{auth:{persistSession:false,autoRefreshToken:false}})
-const app=Fastify({logger:{redact:['req.headers.authorization','req.headers.stripe-signature','req.headers.x-worker-secret','req.headers.x-original-filename','req.body']},bodyLimit:1024*1024,trustProxy:config.trustedProxyCidrs})
+const app=Fastify({
+ // Intuit OAuth callbacks carry authorization codes in their query strings.
+ // Suppress automatic request URL logs to avoid retaining those credentials.
+ disableRequestLogging:true,
+ logger:{
+  redact:['req.headers.authorization','req.headers.stripe-signature',
+   'req.headers.plaid-verification','req.headers.x-worker-secret',
+   'req.headers.x-original-filename','req.body','req.query','req.url','req.raw.url'],
+  serializers:{req:()=>({redacted:true})}
+ },
+ bodyLimit:1024*1024,trustProxy:config.trustedProxyCidrs
+})
 await app.register(cors,{origin:config.webOrigin,methods:['GET','POST'],allowedHeaders:['Authorization','Content-Type','X-Original-Filename','X-External-OCR-Consent']})
 await app.register(helmet,{contentSecurityPolicy:false})
 await app.register(rateLimit,{global:false})

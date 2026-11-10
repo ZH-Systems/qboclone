@@ -1,9 +1,10 @@
-name: Milestone 8 production readiness gate
+name: Milestone 10 commercial production release gate
 on:
   workflow_dispatch:
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
   release-check:
@@ -20,6 +21,18 @@ jobs:
           npm run verify
       - name: Check production dependencies for high-severity advisories
         run: npm audit --omit=dev --audit-level=high
+      - name: Require successful real staging acceptance for this exact commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          count="$(gh api -X GET "repos/$GITHUB_REPOSITORY/actions/workflows/staging-acceptance.yml/runs" \
+            -f head_sha="$GITHUB_SHA" -f status=success --jq '.workflow_runs | length')"
+          if [[ "$count" -lt 1 ]]; then
+            echo "BLOCKED: staging security acceptance has not passed for $GITHUB_SHA"
+            exit 1
+          fi
       - name: Enforce explicit launch acceptances
         env:
           API_URL: ${{ secrets.QBOCLONE_PROD_API_URL }}

@@ -117,6 +117,20 @@ export default function BankFeedMigrationWorkspace({organizationId,role,notify}:
   })
   handler.open()
  })
+ const reconnectBank=(connectionId:string)=>run(async()=>{
+  await loadPlaid()
+  const {sessionId,linkToken}=await callApi('/bank-feeds/reconnect-token',{organizationId,connectionId})
+  if(typeof sessionId!=='string'||typeof linkToken!=='string'||!window.Plaid)
+    throw new Error('Plaid update-mode session unavailable')
+  const handler=window.Plaid.create({token:linkToken,
+   onSuccess:()=>{void callApi('/bank-feeds/reconnect-complete',{
+    organizationId,connectionId,sessionId}).then(()=>load()).then(()=>
+     notify('Institution authorization renewed. Feed synchronization can resume.'))
+    .catch(e=>notify(e instanceof Error?e.message:String(e),true)).finally(()=>handler.destroy())},
+   onExit:error=>{handler.destroy();if(error)notify('Bank reauthorization was not completed',true)}
+  })
+  handler.open()
+ })
  const synchronize=(connectionId:string)=>run(async()=>{
   const result=await callApi('/bank-feeds/sync',{organizationId,connectionId})
   await load();notify('Feed synchronized: '+result.updated+' updated, '+result.removed+' removed.')
@@ -303,7 +317,8 @@ export default function BankFeedMigrationWorkspace({organizationId,role,notify}:
       {accounts.map(a=><option key={a.id} value={a.id}>{a.code} · {a.name}</option>)}
      </select></td>
      <td>{f.last_synced_at?.slice(0,16)||'Not yet synced'}</td>
-     <td><button disabled={!canManage||busy} onClick={()=>synchronize(f.connection_id)}>Sync</button>
+     <td>{f.status==='requires_reauth'&&<button disabled={!canManage||busy} onClick={()=>reconnectBank(f.connection_id)}>Renew bank consent</button>}
+      <button disabled={!canManage||busy||f.status!=='active'} onClick={()=>synchronize(f.connection_id)}>Sync</button>
       <button disabled={!canManage||busy} onClick={()=>disconnect(f.connection_id)}>Disconnect</button></td>
     </tr>)}</tbody></table></div>
    </div>

@@ -94,22 +94,19 @@ export async function registerQboRoutes(app:FastifyInstance,db:SupabaseClient,co
   if(!state||!code||!realm||code.length>3000||realm.length>100)
    return reply.code(400).send({error:'Invalid QuickBooks callback'})
   const digest=createHash('sha256').update(state).digest('hex')
-  const {data:session,error:sError}=await db.from('qbo_oauth_states').select('*')
-   .eq('state_hash',digest).maybeSingle()
-  if(sError||!session||session.consumed_at||
-    new Date(session.expires_at).getTime()<Date.now())
-    return reply.code(400).send({error:'QuickBooks authorization expired or already used'})
   try{
    const qbo=authConfig(config)
+   // Atomically claim OAuth state before exchanging a single-use authorization
+   // code. On exchange failure the user must explicitly restart OAuth.
+   const {data:states,error:stateError}=await db.rpc('claim_qbo_oauth_state',{p_sha256:digest})
+   const session=Array.isArray(states)?states[0]:undefined
+   if(stateError||!session)throw new Error('QuickBooks authorization expired or already used')
    const tokens=await oauthToken(qbo,new URLSearchParams({grant_type:'authorization_code',
     code,redirect_uri:qbo.redirectUri}))
    const {error:saveError}=await db.from('qbo_connections').upsert({
     organization_id:session.organization_id,realm_id:realm,created_by:session.user_id,
     status:'active',...encoded(tokens,qbo)}, {onConflict:'organization_id,realm_id'})
    if(saveError)throw new Error('QuickBooks company connection could not be stored')
-   const {error:consumeError}=await db.from('qbo_oauth_states').update({
-    consumed_at:new Date().toISOString()}).eq('state_hash',digest).is('consumed_at',null)
-   if(consumeError)throw new Error('OAuth connection state could not be consumed')
    return reply.redirect(config.webOrigin+'/?integration=qbo-connected')
   }catch(e){return safeReply(reply,e)}
  })
