@@ -7,8 +7,8 @@ type FeedRow={id:string;feed_account_id:string;description:string;booking_date:s
 type LedgerAccount={id:string;code:string;name:string;is_bank_account:boolean}
 type Statement={id:string;bank_account_id:string;start_date:string;end_date:string;status:string}
 type Migration={id:string;state:string;source_system:string;source_company_id:string|null;created_at:string;source_as_of:string|null;financial_cutover_approved_at:string|null}
-type SourceReport={id:string;report_type:string;period_start:string;period_end:string;content_sha256:string}
-type Control={control_name:string;source_amount:number;target_amount:number;difference:number;reviewed_at:string}
+type SourceReport={id:string;batch_id:string;report_type:string;period_start:string;period_end:string;content_sha256:string}
+type Control={batch_id:string;control_name:string;source_amount:number;target_amount:number;difference:number;reviewed_at:string}
 type Qbo={realm_id:string;status:string;connected_at:string}
 const types=['Account','Customer','Vendor','TaxCode','Invoice','Bill','CreditMemo','VendorCredit',
  'Payment','BillPayment','JournalEntry','Attachable','Purchase','Deposit','SalesReceipt',
@@ -89,9 +89,9 @@ export default function BankFeedMigrationWorkspace({organizationId,role,notify}:
     .eq('organization_id',organizationId).order('created_at',{ascending:false}).limit(40),
    supabase.from('bank_statements').select('id,bank_account_id,start_date,end_date,status')
     .eq('organization_id',organizationId).eq('status','open').order('end_date',{ascending:false}).limit(100),
-   supabase.from('migration_source_reports').select('id,report_type,period_start,period_end,content_sha256')
+   supabase.from('migration_source_reports').select('id,batch_id,report_type,period_start,period_end,content_sha256')
     .eq('organization_id',organizationId).limit(150),
-   supabase.from('migration_reconciliation_signoffs').select('control_name,source_amount,target_amount,difference,reviewed_at')
+   supabase.from('migration_reconciliation_signoffs').select('batch_id,control_name,source_amount,target_amount,difference,reviewed_at')
     .eq('organization_id',organizationId).limit(150)
   ])
   for(const result of [f,t,a,q,b,st,sr,cr])if(result.error)throw result.error
@@ -368,14 +368,14 @@ export default function BankFeedMigrationWorkspace({organizationId,role,notify}:
      <label>Control<select value={controlName} onChange={e=>setControlName(e.target.value)}>
       {['trial_balance','accounts_receivable','accounts_payable','bank_cash','gst_hst','historic_profit_loss'].map(t=><option key={t} value={t}>{t}</option>)}</select></label>
      <label>Source report<select required value={controlReportId} onChange={e=>setControlReportId(e.target.value)}>
-      <option value="">Select captured report</option>{sourceReports.map(r=><option key={r.id} value={r.id}>{r.report_type} · {r.period_end}</option>)}</select></label>
+      <option value="">Select captured report</option>{sourceReports.filter(r=>r.batch_id===selectedBatch).map(r=><option key={r.id} value={r.id}>{r.report_type} · {r.period_end}</option>)}</select></label>
      <label>Source balance (CAD)<input required inputMode="decimal" value={sourceAmount} onChange={e=>setSourceAmount(e.target.value)}/></label>
      <label>Target balance (CAD)<input required inputMode="decimal" value={targetAmount} onChange={e=>setTargetAmount(e.target.value)}/></label>
      <label>Accountant review notes<input required minLength={10} value={controlNotes} onChange={e=>setControlNotes(e.target.value)}/></label>
      <button className="primary" disabled={busy||!canManage||!selectedBatch}>Record balance control</button>
     </form>
     <div className="table-wrap"><table><thead><tr><th>Control</th><th>Source</th><th>Target</th><th>Difference</th></tr></thead>
-     <tbody>{controls.map(c=><tr key={c.control_name}><td>{c.control_name}</td><td>{money(Number(c.source_amount))}</td>
+     <tbody>{controls.filter(c=>c.batch_id===selectedBatch).map(c=><tr key={c.control_name}><td>{c.control_name}</td><td>{money(Number(c.source_amount))}</td>
       <td>{money(Number(c.target_amount))}</td><td>{money(Number(c.difference))}</td></tr>)}</tbody></table></div>
     <button className="primary" disabled={!selectedBatch||!canManage||busy} onClick={acceptCutover}>Accept reconciled migration cutover</button>
    </div>
