@@ -10,6 +10,8 @@ declare
  v_owner uuid;v_org uuid;v_bank uuid;v_ap uuid;v_opening uuid;v_balance numeric;v_failed boolean;
  v_org2 uuid;v_customer uuid;v_invoice uuid;v_deposit uuid;v_alloc uuid;v_refund uuid;v_writeoff uuid;
  v_amount numeric;v_journal uuid;v_payment uuid;v_date date:=current_date;
+ v_scale_org uuid;v_scale_period uuid;v_scale_bank uuid;v_scale_account uuid;
+ v_scale_close jsonb;v_i integer;
 begin
  perform set_config('request.jwt.claim.sub','66666666-6666-4666-8666-666666666671',true);
  v_owner:=auth.uid();
@@ -79,7 +81,28 @@ begin
  select coalesce(sum(total_debits-total_credits),0) into v_balance
  from public.ledger_trial_balance(v_org2,v_date);
  if v_balance<>0 then raise exception 'Deposits and writeoffs caused trial imbalance';end if;
- perform set_config('request.jwt.claim.sub','66666666-6666-4666-8666-666666666672',true);
+ -- A financial year with >100 income accounts must close as a system journal.
+ v_scale_org:=public.create_organization('Large Chart of Accounts QA');
+ v_scale_period:=public.create_fiscal_period(v_scale_org,'2025-01-01','2025-12-31');
+ select id into v_scale_bank from public.accounts
+  where organization_id=v_scale_org and code='1000';
+ for v_i in 1..110 loop
+  v_scale_account:=public.create_account(v_scale_org,'6'||lpad(v_i::text,4,'0'),
+   'Revenue Stream '||v_i,'revenue');
+  perform public.post_journal(v_scale_org,'2025-12-31',
+   'Revenue stream posting '||v_i,'SCALE',gen_random_uuid(),
+   jsonb_build_array(
+    jsonb_build_object('account_id',v_scale_bank,'debit',1,'credit',0),
+    jsonb_build_object('account_id',v_scale_account,'debit',0,'credit',1)));
+ end loop;
+ v_scale_close:=public.close_financial_year(v_scale_org,v_scale_period);
+ if (v_scale_close->>'net_income')::numeric<>110 then
+  raise exception 'Large year-end closing failed to consolidate 110 revenue accounts';end if;
+ select count(*) into v_amount from public.journal_lines
+  where organization_id=v_scale_org and
+  journal_entry_id=(v_scale_close->>'journal_id')::uuid;
+ if v_amount<>111 then raise exception 'Large year-end missing closing journal lines';end if;
+  perform set_config('request.jwt.claim.sub','66666666-6666-4666-8666-666666666672',true);
  v_failed:=false;
  begin perform public.apply_customer_deposit(v_org2,v_deposit,v_invoice,1,v_date,
   '66660333-3333-4333-8333-333333333336');
