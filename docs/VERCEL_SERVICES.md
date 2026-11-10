@@ -7,7 +7,7 @@ The root `vercel.json` defines two public services on one domain:
 | `web` | `apps/web` | Vite | `/*` |
 | `api` | `apps/api` | Fastify | `/api/*` |
 
-The API service explicitly sets `entrypoint: "src/server.ts"` and `outputDirectory: "."`. This prevents a Vercel Services ESM packaging issue where `dist/server.js` is moved to the Function root without the package-level `type: module` declaration, causing `SyntaxError: Cannot use import statement outside a module`. Do not remove these settings without validating deployed runtime behavior.
+The API service explicitly sets `entrypoint: "src/server.mts"` and `outputDirectory: "."`. The `.mts` extension forces a `.mjs` runtime output, which Node recognizes as ESM even if Vercel flattens the bundle outside the original package boundary. The prior `.ts` entrypoint generated a `.js` file that Vercel invoked as CommonJS, resulting in `SyntaxError: Cannot use import statement outside a module`. Keep the explicit source entrypoint and test the live runtime.
 
 **Bindings: none.** The React SPA calls the public same-origin API via `/api`; it cannot use a server-only Vercel service binding. All API routes require their existing authentication or signed webhook/worker authorization as applicable.
 
