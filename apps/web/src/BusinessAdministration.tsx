@@ -7,7 +7,7 @@ type Plan={code:string;title:string;monthly_price_cad:number;features:{users:num
 type Subscription={plan_code:string|null;status:string;current_period_end:string|null;cancel_at_period_end:boolean}
 type Audit={id:number;action:string;entity_type:string;occurred_at:string;details:Record<string,unknown>}
 const roles=['administrator','accountant','bookkeeper','viewer']
-const apiUrl=(import.meta.env.VITE_BILLING_API_URL||'').replace(/\/$/,'')
+const apiUrl=(import.meta.env.VITE_BILLING_API_URL||'/api').replace(/\/$/,'')
 export default function BusinessAdministration({organizationId,role,notify}:Props){
  const [members,setMembers]=useState<Member[]>([])
  const [invitations,setInvitations]=useState<Invitation[]>([])
