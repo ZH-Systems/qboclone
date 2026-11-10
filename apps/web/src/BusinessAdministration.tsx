@@ -15,6 +15,9 @@ export default function BusinessAdministration({organizationId,role,notify}:Prop
  const [subscription,setSubscription]=useState<Subscription|null>(null)
  const [entitlements,setEntitlements]=useState<Record<string,unknown>|null>(null)
  const [audit,setAudit]=useState<Audit[]>([])
+ const [auditPage,setAuditPage]=useState(0)
+ const [usage,setUsage]=useState<{used:number;limit:number;month:string}|null>(null)
+ const [exporting,setExporting]=useState(false)
  const [email,setEmail]=useState('')
  const [newRole,setNewRole]=useState('bookkeeper')
  const [invitationLink,setInvitationLink]=useState('')
@@ -24,13 +27,14 @@ export default function BusinessAdministration({organizationId,role,notify}:Prop
  const canSeeAudit=canManage||role==='accountant'
  const refresh=useCallback(async()=>{
    if(!supabase||!organizationId)return
-   const [m,i,p,s,e,a]=await Promise.all([
+   const [m,i,p,s,e,a,u]=await Promise.all([
     supabase.rpc('list_organization_members',{p_org:organizationId}),
     supabase.from('organization_invitations').select('id,invited_email,role,expires_at,accepted_at,revoked_at').eq('organization_id',organizationId).order('created_at',{ascending:false}).limit(50),
     supabase.from('subscription_plans').select('code,title,monthly_price_cad,features').order('monthly_price_cad'),
     supabase.from('organization_subscriptions').select('plan_code,status,current_period_end,cancel_at_period_end').eq('organization_id',organizationId).maybeSingle(),
     supabase.rpc('organization_entitlements',{p_org:organizationId}),
-    supabase.from('audit_events').select('id,action,entity_type,occurred_at,details').eq('organization_id',organizationId).order('occurred_at',{ascending:false}).limit(100)
+    supabase.from('audit_events').select('id,action,entity_type,occurred_at,details').eq('organization_id',organizationId).order('id',{ascending:false}).range(auditPage*50,auditPage*50+49),
+    supabase.rpc('organization_usage_summary',{p_organization_id:organizationId})
    ])
    if(m.error)throw m.error
    if(p.error)throw p.error
@@ -38,22 +42,38 @@ export default function BusinessAdministration({organizationId,role,notify}:Prop
    if(e.error)throw e.error
    if(canManage&&i.error)throw i.error
    if(canSeeAudit&&a.error)throw a.error
+   if(u.error)throw u.error
    setMembers((m.data||[]) as Member[])
    setInvitations(canManage?(i.data||[]) as Invitation[]:[])
    setPlans((p.data||[]) as Plan[])
    setSubscription(s.data as Subscription|null)
    setEntitlements(e.data as Record<string,unknown>|null)
    setAudit(canSeeAudit?(a.data||[]) as Audit[]:[])
- },[organizationId,canManage,canSeeAudit])
+   setUsage(u.data as {used:number;limit:number;month:string}|null)
+ },[organizationId,canManage,canSeeAudit,auditPage])
  useEffect(()=>{void refresh().catch(e=>notify(e.message,true))},[refresh])
  const run=async(work:()=>Promise<void>)=>{setBusy(true);try{await work()}catch(e){notify(e instanceof Error?e.message:String(e),true)}finally{setBusy(false)}}
  const invite=(e:FormEvent)=>{e.preventDefault();void run(async()=>{
    if(!supabase)return
-   const {data,error}=await supabase.rpc('invite_organization_member',{p_org:organizationId,p_email:email.trim(),p_role:newRole})
-   if(error)throw error
-   // Keep the bearer token out of server access logs and HTTP referer headers.
-   setInvitationLink(window.location.origin+window.location.pathname+'#invite='+data)
-   await refresh();notify('Invitation created. Share the link privately with the intended user.')
+   if(apiUrl){
+    const {data:session,error:authError}=await supabase.auth.getSession()
+    if(authError||!session.session)throw new Error('Sign in first')
+    const response=await fetch(apiUrl+'/organizations/invite-email',{
+     method:'POST',headers:{Authorization:'Bearer '+session.session.access_token,'Content-Type':'application/json'},
+     body:JSON.stringify({organizationId,email:email.trim(),role:newRole})
+    })
+    if(!response.ok){
+     const details=await response.json().catch(()=>({error:'Email invitation failed'})) as {error?:string}
+     throw new Error(details.error||'Email invitation failed')
+    }
+    setInvitationLink('');setEmail('')
+    await refresh();notify('Invitation email submitted to the provider.')
+   }else{
+    const {data,error}=await supabase.rpc('invite_organization_member',{p_org:organizationId,p_email:email.trim(),p_role:newRole})
+    if(error)throw error
+    setInvitationLink(window.location.origin+window.location.pathname+'#invite='+data)
+    await refresh();notify('Invitation created. Share the link privately with the intended user.')
+   }
  })}
  const revoke=(id:string)=>void run(async()=>{
   if(!supabase)return
@@ -81,6 +101,29 @@ export default function BusinessAdministration({organizationId,role,notify}:Prop
   if(window.location.hash.includes('invite='))history.replaceState(null,'',window.location.pathname+window.location.search)
   await refresh();notify('Invitation accepted. Switch to the invited business to access its books.')
  })}
+ const exportData=()=>void run(async()=>{
+  if(!supabase||!apiUrl)throw new Error('Billing API deployment is required for audited exports')
+  setExporting(true)
+  try{
+   const {data,error}=await supabase.auth.getSession()
+   if(error||!data.session)throw new Error('Sign in first')
+   const response=await fetch(apiUrl+'/organizations/export',{
+    method:'POST',headers:{Authorization:'Bearer '+data.session.access_token,'Content-Type':'application/json'},
+    body:JSON.stringify({organizationId})
+   })
+   if(!response.ok){
+    const details=await response.json().catch(()=>({error:'Export failed'})) as {error?:string}
+    throw new Error(details.error||'Export failed')
+   }
+   const blob=await response.blob()
+   const url=URL.createObjectURL(blob)
+   const anchor=document.createElement('a')
+   anchor.href=url;anchor.download='organization-'+organizationId+'.json'
+   document.body.appendChild(anchor);anchor.click();anchor.remove()
+   URL.revokeObjectURL(url)
+   notify('Organization data export prepared.')
+  }finally{setExporting(false)}
+ })
  const billing=(operation:'checkout'|'portal',code?:string)=>void run(async()=>{
   if(!supabase)throw new Error('Authentication unavailable')
   if(!apiUrl)throw new Error('VITE_BILLING_API_URL must be configured')
@@ -105,12 +148,13 @@ export default function BusinessAdministration({organizationId,role,notify}:Prop
    {canManage&&<form className="card workspace-form" onSubmit={invite}><h2>Invite a team member</h2><div className="workspace-fields"><label>Email<input type="email" required value={email} onChange={e=>setEmail(e.target.value)}/></label><label>Role<select value={newRole} onChange={e=>setNewRole(e.target.value)}>{roles.filter(r=>role==='owner'||r!=='administrator').map(r=><option key={r} value={r}>{r}</option>)}</select></label><button className="primary" disabled={busy}>Create invitation</button></div>
    {invitationLink&&<div className="invitation-token"><label>Private invitation URL<input value={invitationLink} readOnly/></label><button type="button" onClick={()=>void navigator.clipboard.writeText(invitationLink)}>Copy link</button><p>Share securely. Only the intended verified email can redeem it; the token expires after seven days.</p></div>}
    <h3>Pending invitations</h3><div className="table-wrap"><table><thead><tr><th>Email</th><th>Role</th><th>Expires</th><th>Status</th><th>Action</th></tr></thead><tbody>{invitations.map(i=><tr key={i.id}><td>{i.invited_email}</td><td>{i.role}</td><td>{i.expires_at.slice(0,10)}</td><td>{i.accepted_at?'Accepted':i.revoked_at?'Revoked':'Pending'}</td><td>{!i.accepted_at&&!i.revoked_at&&<button type="button" className="link-button" disabled={busy} onClick={()=>revoke(i.id)}>Revoke</button>}</td></tr>)}</tbody></table></div></form>}
-   <div className="card workspace-form"><h2>Subscription and feature access</h2><p>Current plan: <strong>{subscription?.plan_code||'Unsubscribed'}</strong>, status: <strong>{subscription?.status||'none'}</strong>.</p><p>Member seats: {members.length} of {String(entitlements?.users||1)}. Subscription limits are enforced on invitation acceptance.</p>
+   <div className="card workspace-form"><h2>Subscription and feature access</h2><p>Current plan: <strong>{subscription?.plan_code||'Unsubscribed'}</strong>, status: <strong>{subscription?.status||'none'}</strong>.</p><p>Member seats: {members.length} of {String(entitlements?.users||1)}. Subscription limits are enforced on invitation acceptance.</p><p>Bank import usage this month: <strong>{usage?.used??0} of {usage?.limit??500} rows</strong>. Imports exceeding the limit are rejected by the database.</p>
    {subscription?.current_period_end&&<p>Current period ends: {subscription.current_period_end.slice(0,10)}.</p>}
    {subscription?.cancel_at_period_end&&<p>Subscription is scheduled for cancellation at period end.</p>}
    <div className="plan-cards">{plans.map(p=><div key={p.code} className="plan-card"><h3>{p.title}</h3><strong>${Number(p.monthly_price_cad).toFixed(2)} CAD/mo</strong><p>{p.features.users} users · {p.features.receipt_ocr_monthly} planned OCR pages/mo</p>{role==='owner'&&<button type="button" disabled={busy} onClick={()=>billing(active?'portal':'checkout',active?undefined:p.code)}>{active?'Manage or change plan through portal':'Choose plan'}</button>}</div>)}</div>
    {role==='owner'&&<button type="button" className="primary" disabled={busy} onClick={()=>billing('portal')}>Manage billing in Stripe</button>}
    <p className="muted">Proposed subscription pricing. Stripe products and prices must be configured by the operator; Grace-period restrictions, read-only transitions and complete data-export workflows are not implemented yet. Accounting records are not automatically deleted when a subscription expires.</p></div>
-   {canSeeAudit&&<div className="card"><div className="card-head"><div><h2>Recent audit events</h2><p>Latest 100 membership, billing, journal and document events.</p></div></div><div className="table-wrap"><table><thead><tr><th>Time</th><th>Action</th><th>Entity</th></tr></thead><tbody>{audit.map(e=><tr key={e.id}><td>{new Date(e.occurred_at).toLocaleString('en-CA')}</td><td>{e.action}</td><td>{e.entity_type}</td></tr>)}{audit.length===0&&<tr><td colSpan={3}><div className="empty">No audit events yet.</div></td></tr>}</tbody></table></div></div>}
+   {canSeeAudit&&<div className="card"><div className="card-head"><div><h2>Audit events</h2><p>50 events per page, including membership, accounting and banking operations.</p></div></div><div className="table-wrap"><table><thead><tr><th>Time</th><th>Action</th><th>Entity</th></tr></thead><tbody>{audit.map(e=><tr key={e.id}><td>{new Date(e.occurred_at).toLocaleString('en-CA')}</td><td>{e.action}</td><td>{e.entity_type}</td></tr>)}{audit.length===0&&<tr><td colSpan={3}><div className="empty">No audit events yet.</div></td></tr>}</tbody></table></div><div className="audit-pager"><button type="button" disabled={auditPage===0} onClick={()=>setAuditPage(Math.max(0,auditPage-1))}>Previous</button><span>Page {auditPage+1}</span><button type="button" disabled={audit.length<50} onClick={()=>setAuditPage(auditPage+1)}>Next</button></div></div>}
+ {canSeeAudit&&<div className="card workspace-form"><h2>Organization data export</h2><p>Download tenant-scoped financial records and audit history. Exports are logged and capped at 10,000 records per table. Large books require an archival export.</p><button type="button" className="primary" disabled={busy||exporting||!apiUrl} onClick={exportData}>{exporting?'Preparing export…':'Export JSON'}</button></div>}
  </section>
 }
