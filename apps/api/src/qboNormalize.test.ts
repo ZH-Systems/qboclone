@@ -17,7 +17,9 @@ describe('QuickBooks migration normalization',()=>{
  it('does not discard historical journal lines and payment allocations',()=>{
   const raw={Id:'55',TxnDate:'2026-01-01',Line:[{Amount:50,PostingType:'Debit'}]}
   expect(normalizeQbo('JournalEntry',raw)?.record.raw).toBe(raw)
-  expect(normalizeQbo('Payment',{Id:'p1',LinkedTxn:[{TxnId:'9'}]})?.record.raw).toHaveProperty('LinkedTxn')
+  expect(normalizeQbo('Payment',{Id:'p1',TxnDate:'2026-10-02',TotalAmt:50,
+   Line:[{Amount:50,LinkedTxn:[{TxnId:'9'}]}]})?.record.allocations)
+   .toEqual([{source_document_id:'9',amount:50}])
  })
  it('rejects unsupported dynamic type in source query',()=>{
   expect(()=>qboQuery('CompanyInfo' as never,1)).toThrow()
