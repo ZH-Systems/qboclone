@@ -64,7 +64,7 @@ create table public.inventory_issue_lots(
  foreign key(organization_id,issue_id) references public.inventory_issues(organization_id,id),
  foreign key(organization_id,receipt_id) references public.inventory_receipts(organization_id,id)
 );
-create index inventory_fifo_idx on public.inventory_receipts(organization_id,product_id,received_on,id)
+create index inventory_fifo_idx on public.inventory_receipts(organization_id,product_id,received_on,created_at,id)
  where remaining_quantity>0;
 create index inventory_issues_product_idx on public.inventory_issues(organization_id,product_id,issued_on);
 alter table public.inventory_products enable row level security;
@@ -217,7 +217,7 @@ begin
  v_remaining:=v_line.quantity;
  for v_lot in select * from public.inventory_receipts
   where organization_id=p_org and product_id=p_product and received_on<=p_date
-  and remaining_quantity>0 order by received_on,id for update loop
+  and remaining_quantity>0 order by received_on,created_at,id for update loop
   exit when v_remaining=0;
   v_take:=least(v_lot.remaining_quantity,v_remaining);
   v_cost:=case when v_take=v_lot.remaining_quantity then v_lot.remaining_cost
