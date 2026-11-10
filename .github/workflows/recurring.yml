@@ -34,3 +34,17 @@ jobs:
             -H "X-Worker-Secret: $WORKER_SECRET" \
             -H "Content-Type: application/json" \
             --data '{}'
+      - name: Send opted-in overdue reminders
+        if: ${{ vars.QBOCLONE_REMINDERS_ENABLED == 'true' }}
+        env:
+          API_URL: ${{ secrets.QBOCLONE_API_URL }}
+          WORKER_SECRET: ${{ secrets.QBOCLONE_AUTOMATION_WORKER_SECRET }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail-with-body --silent --show-error --max-time 90 \
+            --retry 2 --retry-delay 5 \
+            -X POST "${API_URL%/}/automation/reminders/run" \
+            -H "X-Worker-Secret: $WORKER_SECRET" \
+            -H "Content-Type: application/json" \
+            --data '{}'
