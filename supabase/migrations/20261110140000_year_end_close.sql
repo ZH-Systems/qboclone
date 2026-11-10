@@ -84,7 +84,7 @@ declare v_actor_role text; v_period public.fiscal_periods%rowtype;
 begin
  select role into v_actor_role from public.organization_members where
   organization_id=p_organization_id and user_id=auth.uid();
- if v_actor_role not in ('owner','administrator','accountant') then
+ if v_actor_role is null or v_actor_role not in ('owner','administrator','accountant') then
   raise exception 'Financial year close requires owner, administrator or accountant'; end if;
  perform 1 from public.organizations where id=p_organization_id for update;
  select * into v_period from public.fiscal_periods
