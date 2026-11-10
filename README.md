@@ -39,6 +39,12 @@ The Vite development server exposes the web app locally. Only the Supabase **pub
 
 Import this repository as a Vercel project. Set Root Directory to `apps/web`, Framework Preset to Vite, Build Command to `npm run build`, and Output Directory to `dist`. Set the two `VITE_` environment variables in the Vercel dashboard. Deploy once the database migration has run.
 
+## Milestone 2 development branch
+
+A follow-up milestone adds customer/vendor records, invoice and bill drafts/posting, source-linked credits, partial payments, independent posting idempotency namespaces, manual journal reversals, fiscal-period controls, and ledger-backed trial balance / P&L / balance-sheet summaries. See [Milestone 2 specification and QA acceptance tests](docs/MILESTONE_2.md).
+
+Do **not** apply migration 2 or use financial data in production until the migrations, permission policies and accounting assertions have been validated in a test Supabase instance.
+
 ## Scope for next phase
 
 - Financial reporting over complete journals
