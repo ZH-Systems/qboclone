@@ -7,6 +7,8 @@ The root `vercel.json` defines two public services on one domain:
 | `web` | `apps/web` | Vite | `/*` |
 | `api` | `apps/api` | Fastify | `/api/*` |
 
+The API service explicitly sets `entrypoint: "src/server.ts"` and `outputDirectory: "."`. This prevents a Vercel Services ESM packaging issue where `dist/server.js` is moved to the Function root without the package-level `type: module` declaration, causing `SyntaxError: Cannot use import statement outside a module`. Do not remove these settings without validating deployed runtime behavior.
+
 **Bindings: none.** The React SPA calls the public same-origin API via `/api`; it cannot use a server-only Vercel service binding. All API routes require their existing authentication or signed webhook/worker authorization as applicable.
 
 ## Import
@@ -17,7 +19,7 @@ The root `vercel.json` defines two public services on one domain:
 4. Configure the API's **server-only** variables from `apps/api/.env.example` in the deployment: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `WEB_APP_ORIGIN`, and enabled provider/worker credentials. Stripe Billing is disabled by default. Leave `STRIPE_ENABLED=false` and omit `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET` until ready to activate billing. Set `STRIPE_ENABLED=true` only with a real secret key and signed webhook secret (live credentials when `DEPLOYMENT_ENV=production`). When disabled, checkout, billing portal and Stripe webhook endpoints return HTTP 503 without blocking the rest of the API. Set `WEB_APP_ORIGIN=https://YOUR-DOMAIN`, without a trailing slash or path. Configure the environment's approved `DEPLOYMENT_ENV` and `TRUSTED_PROXY_CIDRS` according to `docs/MILESTONE_10.md`; production validation intentionally fails closed.
 5. If using Intuit, configure `QBO_REDIRECT_URI=https://YOUR-DOMAIN/api/qbo/connect/callback`, then register exactly this address in the Intuit developer console. Configure provider webhook endpoints `https://YOUR-DOMAIN/api/stripe/webhook` and `https://YOUR-DOMAIN/api/bank-feeds/plaid-webhook`. Callback requests are externally initiated, so the API's routed paths must be public. Do not create a service binding for them.
 6. Apply the entire SQL migration chain in order to an isolated Supabase staging project. Verify Auth, private Storage, RLS, and provider settings before enabling integrations.
-7. Deploy. Probe `https://YOUR-DOMAIN/api/health` and `https://YOUR-DOMAIN/api/ready`, then run `docs/MILESTONE_10.md` staging acceptance against the actual service URL. A passing health probe does not imply financial or security certification.
+7. Deploy the same commit to an isolated preview and confirm the `api` function actually starts. Inspect Vercel runtime logs if `/api/health` returns `FUNCTION_INVOCATION_FAILED`. A `READY` build is not proof of runtime compatibility. Probe `https://YOUR-DOMAIN/api/health` and `https://YOUR-DOMAIN/api/ready`, then run `docs/MILESTONE_10.md` staging acceptance against the actual service URL. A passing health probe does not imply financial or security certification.
 
 ## Routing behavior
 
