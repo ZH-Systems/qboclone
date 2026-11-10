@@ -181,7 +181,9 @@ export default function BankFeedMigrationWorkspace({organizationId,role,notify}:
   if(error)throw error
   const progressResult=await supabase.rpc('migration_batch_progress',{p_org:organizationId,p_batch:selectedBatch})
   if(progressResult.error)throw progressResult.error
-  setReport({...data,progress:progressResult.data} as Record<string,unknown>)
+  const inventoryResult=await supabase.rpc('inventory_migration_readiness',{p_org:organizationId,p_batch:selectedBatch})
+  if(inventoryResult.error)throw inventoryResult.error
+  setReport({...data,progress:progressResult.data,inventory_readiness:inventoryResult.data} as Record<string,unknown>)
  })
  const approve=()=>run(async()=>{
   if(!supabase||!selectedBatch)throw new Error('Select a migration batch')
