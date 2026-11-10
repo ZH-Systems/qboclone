@@ -1,7 +1,7 @@
 import {useCallback,useEffect,useMemo,useState,type FormEvent} from 'react'
 import {supabase} from './lib/supabase'
-import {parseMoney,formatMoney} from './lib/accounting'
-import {parseBankCsv} from './lib/bankCsv'
+import {formatMoney} from './lib/accounting'
+import {parseBankCsv,parseSignedMoney} from './lib/bankCsv'
 
 type Props={organizationId:string;mode:'tax'|'banking';notify:(message:string,isError?:boolean)=>void}
 type Account={id:string;code:string;name:string;account_type:string}
@@ -10,7 +10,7 @@ type Statement={id:string;bank_account_id:string;start_date:string;end_date:stri
 type BankRow={id:string;statement_id:string;line_number:number;transaction_date:string;description:string;reference:string|null;signed_amount:number;matched_journal_entry_id:string|null}
 type Journal={id:string;entry_date:string;memo:string;reference:string|null;journal_lines:{account_id:string;debit:number;credit:number}[]}
 const today=()=>new Date().toLocaleDateString('sv-SE',{timeZone:'America/Toronto'})
-function inputMoney(v:string):string{return (parseMoney(v)/100).toFixed(2)}
+function inputMoney(v:string):string{return parseSignedMoney(v)}
 export default function TaxBankWorkspace({organizationId,mode,notify}:Props){
   const [accounts,setAccounts]=useState<Account[]>([])
   const [taxCodes,setTaxCodes]=useState<TaxCode[]>([])
