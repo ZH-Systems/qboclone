@@ -40,6 +40,7 @@ export default function TaxBankWorkspace({organizationId,mode,notify}:Props){
   const [bankColumns,setBankColumns]=useState<string[]>([])
   const [bankMapping,setBankMapping]=useState<BankColumnMap>({date:'',description:'',amount:'',debit:'',credit:'',reference:'',dateFormat:'iso'})
   const [selectedMatches,setSelectedMatches]=useState<Record<string,string>>({})
+  const [suggestedCount,setSuggestedCount]=useState(0)
   const [preview,setPreview]=useState('')
   const refresh=useCallback(async()=>{
     if(!supabase||!organizationId)return
@@ -134,6 +135,20 @@ export default function TaxBankWorkspace({organizationId,mode,notify}:Props){
     return journals.filter(j=>Math.round(j.journal_lines.filter(l=>l.account_id===current.bank_account_id)
       .reduce((sum,l)=>sum+(Number(l.debit)-Number(l.credit)),0)*100)===Math.round(Number(row.signed_amount)*100))
   }
+  const suggestMatches=()=>void run(async()=>{
+    if(!supabase||!current)throw new Error('Select an open statement')
+    const {data,error}=await supabase.rpc('suggest_bank_transaction_matches',{
+      p_org:organizationId,p_statement:current.id,p_limit:500})
+    if(error)throw error
+    const selected:Record<string,string>={}
+    for(const result of (data||[]) as {bank_transaction_id:string;journal_entry_id:string;score:number}[]){
+     if(!selected[result.bank_transaction_id]&&journals.some(j=>j.id===result.journal_entry_id))
+      selected[result.bank_transaction_id]=result.journal_entry_id
+    }
+    setSelectedMatches(prev=>({...prev,...selected}))
+    setSuggestedCount(Object.keys(selected).length)
+    notify('Suggested '+Object.keys(selected).length+' candidate matches. Review each before confirming.')
+  })
   const match=(row:BankRow)=>void run(async()=>{
     if(!supabase||!selectedMatches[row.id])throw new Error('Select a matching journal.')
     const {error}=await supabase.rpc('match_bank_transaction',{
@@ -190,7 +205,7 @@ export default function TaxBankWorkspace({organizationId,mode,notify}:Props){
         </select></label>
        </div>}
        {sourceBankCsv&&<button type="button" disabled={busy} onClick={normalizeBankFile}>Normalize mapped CSV</button>}
-      </div><label className="field-label">Statement CSV<textarea rows={5} value={csv} onChange={e=>setCsv(e.target.value)} placeholder={'date,description,amount,reference\n2026-11-01,Client payment,113.00,INV-001'}/></label><div className="workspace-toolbar"><button className="primary" disabled={busy||!csv.trim()} onClick={importCsv}>Import CSV rows</button><button type="button" disabled={busy||rows.length===0} onClick={resetImport}>Reset imported rows</button><button className="primary" disabled={busy||rows.length===0||activeRows.length>0} onClick={reconcile}>Reconcile statement</button></div></>}
+      </div><label className="field-label">Statement CSV<textarea rows={5} value={csv} onChange={e=>setCsv(e.target.value)} placeholder={'date,description,amount,reference\n2026-11-01,Client payment,113.00,INV-001'}/></label><div className="workspace-toolbar"><button className="primary" disabled={busy||!csv.trim()} onClick={importCsv}>Import CSV rows</button><button type="button" disabled={busy||rows.length===0} onClick={suggestMatches}>Suggest journal matches</button><button type="button" disabled={busy||rows.length===0} onClick={resetImport}>Reset imported rows</button><button className="primary" disabled={busy||rows.length===0||activeRows.length>0} onClick={reconcile}>Reconcile statement</button></div></>}
       <div className="table-wrap"><table><thead><tr><th>#</th><th>Date</th><th>Description</th><th>Bank change</th><th>Match</th></tr></thead><tbody>{rows.map(r=><tr key={r.id}><td>{r.line_number}</td><td>{r.transaction_date}</td><td>{r.description}</td><td>{formatMoney(Math.round(Number(r.signed_amount)*100))}</td><td>{r.matched_journal_entry_id?<><span className="status">Matched</span>{current.status==='open'&&<button className="link-button" disabled={busy} onClick={()=>unmatch(r)}>Unmatch</button>}</>:current.status==='open'?<div className="row-actions"><select value={selectedMatches[r.id]||''} onChange={e=>setSelectedMatches({...selectedMatches,[r.id]:e.target.value})}><option value="">Choose journal</option>{candidates(r).map(j=><option key={j.id} value={j.id}>{j.entry_date} · {j.memo.slice(0,42)}</option>)}</select><button disabled={busy||!selectedMatches[r.id]} onClick={()=>match(r)}>Match</button></div>:'Unmatched'}</td></tr>)}{rows.length===0&&<tr><td colSpan={5}><div className="empty">No imported transactions.</div></td></tr>}</tbody></table></div></>}</div>
     </>}
   </section>
