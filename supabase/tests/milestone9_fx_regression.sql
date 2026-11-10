@@ -21,7 +21,12 @@ begin
   'Invalid generic FX payment','99990000-0000-4000-8000-000000000021');
  exception when others then v_failed:=true;end;
  if not v_failed then raise exception 'Standard payment accepted foreign document';end if;
- v_pay:=public.record_foreign_currency_payment(v_org,v_invoice,100,140,146,current_date,
+ v_failed:=false;
+ begin perform public.record_foreign_currency_payment(v_org,v_invoice,100,90,146,current_date,
+  'Invalid book exchange rate','99990000-0000-4000-8000-000000000025');
+ exception when others then v_failed:=true;end;
+ if not v_failed then raise exception 'FX allocation at inconsistent recognition rate accepted';end if;
+  v_pay:=public.record_foreign_currency_payment(v_org,v_invoice,100,140,146,current_date,
   'Bank exchanged USD','99990000-0000-4000-8000-000000000022');
  if v_pay<>public.record_foreign_currency_payment(v_org,v_invoice,100,140,146,current_date,
   'Bank exchanged USD','99990000-0000-4000-8000-000000000022')
