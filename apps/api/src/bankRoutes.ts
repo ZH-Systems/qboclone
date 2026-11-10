@@ -81,11 +81,11 @@ export async function registerBankRoutes(app:FastifyInstance,db:SupabaseClient,c
    if(typeof sessionId!=='string'||!/^[0-9a-f-]{36}$/i.test(sessionId)||
     typeof publicToken!=='string'||publicToken.length<8||publicToken.length>1024)
     throw new Error('Invalid bank connection authorization')
-   const {data:session,error:sError}=await db.from('bank_feed_link_sessions').select('*')
-    .eq('id',sessionId).eq('organization_id',org).eq('user_id',user).maybeSingle()
-   if(sError||!session||session.consumed_at||new Date(session.expires_at).getTime()<Date.now())
-    throw new Error('Bank connection session expired or already used')
    const plaid=plaidConfig(config)
+   // Claim BEFORE token exchange. CAS RPC makes replay/concurrent use impossible.
+   const {data:claimed,error:claimError}=await db.rpc('claim_bank_link_session',{
+    p_session:sessionId,p_organization:org,p_user:user})
+   if(claimError||claimed!==true)throw new Error('Bank connection session expired or already used')
    const exchange=await plaidRequest<{access_token:string;item_id:string}>(
     plaid,'/item/public_token/exchange',{public_token:publicToken})
    if(!exchange.access_token||!exchange.item_id)throw new Error('Bank provider exchange failed')
@@ -109,12 +109,9 @@ export async function registerBankRoutes(app:FastifyInstance,db:SupabaseClient,c
      throw new Error('Could not store linked bank accounts')
     }
    }
-   const {error:consumeError}=await db.from('bank_feed_link_sessions').update({
-    consumed_at:new Date().toISOString()}).eq('id',sessionId).is('consumed_at',null)
-   if(consumeError)throw new Error('Failed to mark bank connection session consumed')
    // Never return a Plaid access token, even encrypted.
    return {connectionId:connection.id,accounts:accounts.map(a=>({id:a.provider_account_id,name:a.display_name,mask:a.mask_last4}))}
-  }catch(e){req.log.error({error:e instanceof Error?e.message:'bank exchange'},'Bank exchange failed')
+  }catch(e){req.log.warn({category:'bank_exchange_failed'},'Bank exchange failed')
    return errorReply(reply,e)}
  })
  app.post('/bank-feeds/sync',{config:{rateLimit:{max:4,timeWindow:'1 minute'}}},async(req,reply)=>{
