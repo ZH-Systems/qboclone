@@ -276,7 +276,7 @@ begin
     source_document_id,created_by)
   values(p_organization_id,p_contact_id,p_type,
     (case p_type when 'invoice' then 'INV-' when 'bill' then 'BILL-' when 'credit_note' then 'CN-' else 'VC-' end)||
-     lpad(v_seq::text,6,'0'),
+     case when length(v_seq::text)>6 then v_seq::text else lpad(v_seq::text,6,'0') end,
     p_issue_date,p_due_date,coalesce(p_memo,''),p_source_document_id,auth.uid())
   returning id into v_id;
   for v_line in select value from jsonb_array_elements(p_lines)
