@@ -2,6 +2,8 @@
 -- Bills retain their normal expense posting, receipt reclassifies that expense
 -- to inventory. Invoice dispatch creates COGS only after the invoice is posted.
 -- No direct client writes. All transitions lock the organization and source lines.
+alter table public.financial_document_lines add constraint financial_document_lines_org_id_unique unique(organization_id,id);
+
 create table public.inventory_products(
  id uuid primary key default gen_random_uuid(),
  organization_id uuid not null references public.organizations(id) on delete restrict,
