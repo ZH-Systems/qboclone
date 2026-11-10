@@ -3,7 +3,8 @@ import type {SupabaseClient} from '@supabase/supabase-js'
 import {randomUUID} from 'node:crypto'
 import {bearerToken,requireOrganizationRole,requireOrganizationId} from './operations.js'
 import type {ServerConfig} from './config.js'
-import {plaidRequest,encryptionKey,encryptProviderToken,decryptProviderToken,sanitizePlaidPage,classifySyncError,verifyWebhookToken,
+import {plaidRequest,encryptionKey,encryptProviderToken,decryptProviderToken,sanitizePlaidPage,classifySyncError,verifyWebhookToken,plaidWebhookKeyId,verifyPlaidWebhook,
+ type PlaidWebhookJwk,
  type PlaidClientConfig,type PlaidPage,type PlaidAccount} from './plaid.js'
 
 type BankConfig=ServerConfig&{plaidClientId:string|null;plaidSecret:string|null;
@@ -168,4 +169,93 @@ export async function registerBankRoutes(app:FastifyInstance,db:SupabaseClient,c
    return {disconnected:true}
   }catch(e){return errorReply(reply,e)}
  })
+ app.post('/bank-feeds/reconnect-token',{config:{rateLimit:{max:6,timeWindow:'1 hour'}}},async(req,reply)=>{
+  try{
+   const payload=input(req.body),org=requireOrganizationId(payload.organizationId)
+   const user=await member(db,req.headers.authorization,org,manageRoles)
+   if(typeof payload.connectionId!=='string')throw new Error('Connection ID required')
+   const {data:connection,error}=await db.from('bank_feed_connections').select('*')
+    .eq('organization_id',org).eq('id',payload.connectionId)
+    .eq('provider','plaid').neq('status','disconnected').maybeSingle()
+   if(error||!connection)throw new Error('Bank connection unavailable')
+   const plaid=plaidConfig(config)
+   const sessionId=randomUUID()
+   const response=await plaidRequest<{link_token:string}>(plaid,'/link/token/create',{
+    access_token:decryptProviderToken(connection.encrypted_token,plaid.tokenEncryptionKey),
+    client_name:'Ledger North',language:'en',country_codes:['CA'],
+    user:{client_user_id:user}
+   })
+   if(typeof response.link_token!=='string'||!response.link_token)
+    throw new Error('Invalid Plaid update-mode response')
+   const {error:sessionError}=await db.from('bank_feed_update_sessions').insert({
+    id:sessionId,organization_id:org,connection_id:connection.id,user_id:user,
+    expires_at:new Date(Date.now()+15*60000).toISOString()
+   })
+   if(sessionError)throw new Error('Could not store Plaid update-mode session')
+   return {sessionId,linkToken:response.link_token}
+  }catch(e){return errorReply(reply,e)}
+ })
+ app.post('/bank-feeds/reconnect-complete',{config:{rateLimit:{max:6,timeWindow:'1 hour'}}},async(req,reply)=>{
+  try{
+   const payload=input(req.body),org=requireOrganizationId(payload.organizationId)
+   const user=await member(db,req.headers.authorization,org,manageRoles)
+   const connectionId=payload.connectionId,sessionId=payload.sessionId
+   if(typeof connectionId!=='string'||typeof sessionId!=='string')
+    throw new Error('Connection and update-session IDs required')
+   const plaid=plaidConfig(config)
+   const {data:claimed,error:claimError}=await db.rpc('claim_bank_update_session',{
+    p_id:sessionId,p_org:org,p_user:user,p_connection:connectionId})
+   if(claimError||claimed!==true)throw new Error('Bank reauthorization session expired or already used')
+   const {data:connection,error}=await db.from('bank_feed_connections').select('*')
+    .eq('organization_id',org).eq('id',connectionId).neq('status','disconnected').maybeSingle()
+   if(error||!connection)throw new Error('Bank connection unavailable')
+   const response=await plaidRequest<{item?:{item_id?:string;error?:unknown}}>(
+    plaid,'/item/get',{access_token:decryptProviderToken(connection.encrypted_token,plaid.tokenEncryptionKey)})
+   if(response.item?.item_id!==connection.provider_item_id||response.item?.error)
+    throw new Error('Provider has not restored this bank connection yet')
+   const {error:updateError}=await db.from('bank_feed_connections')
+    .update({status:'active',last_error_code:null,last_synced_at:null})
+    .eq('organization_id',org).eq('id',connectionId)
+   if(updateError)throw new Error('Bank reauthorization result could not be saved')
+   return {reconnected:true}
+  }catch(e){return errorReply(reply,e)}
+ })
+ app.post('/bank-feeds/plaid-webhook',{config:{rateLimit:{max:120,timeWindow:'1 minute'}}},async(req,reply)=>{
+  const signature=req.headers['plaid-verification']
+  if(typeof signature!=='string'||!Buffer.isBuffer(req.body)||req.body.length>50000)
+   return reply.code(401).send({error:'Signed Plaid webhook required'})
+  try{
+   const plaid=plaidConfig(config)
+   const kid=plaidWebhookKeyId(signature)
+   const response=await plaidRequest<{key:PlaidWebhookJwk}>(
+    plaid,'/webhook_verification_key/get',{key_id:kid})
+   if(!verifyPlaidWebhook(req.body,signature,response.key))
+    return reply.code(401).send({error:'Plaid webhook signature rejected'})
+   const event=input(req.body)
+   const itemId=event.item_id,kind=event.webhook_type,code=event.webhook_code
+   if(typeof itemId!=='string'||itemId.length>200||
+    typeof kind!=='string'||typeof code!=='string')
+    return reply.code(400).send({error:'Invalid Plaid webhook payload'})
+   const {data:connection,error}=await db.from('bank_feed_connections')
+    .select('id,status').eq('provider','plaid').eq('provider_item_id',itemId).maybeSingle()
+   if(error)return reply.code(503).send({error:'Bank event lookup unavailable'})
+   if(!connection||connection.status==='disconnected')return {received:true,ignored:true}
+   if(kind==='ITEM'&&(['PENDING_DISCONNECT','PENDING_EXPIRATION'].includes(code)||
+    (code==='ERROR'&&(event.error as Record<string,unknown>|undefined)?.error_code==='ITEM_LOGIN_REQUIRED'))){
+    const {error:saveError}=await db.from('bank_feed_connections')
+     .update({status:'requires_reauth',last_error_code:code}).eq('id',connection.id)
+    if(saveError)return reply.code(503).send({error:'Bank status update unavailable'})
+   }else if(kind==='TRANSACTIONS'&&
+    ['DEFAULT_UPDATE','HISTORICAL_UPDATE','INITIAL_UPDATE','TRANSACTIONS_REMOVED','SYNC_UPDATES_AVAILABLE'].includes(code)){
+    const {error:saveError}=await db.from('bank_feed_connections')
+     .update({last_synced_at:null}).eq('id',connection.id)
+    if(saveError)return reply.code(503).send({error:'Bank sync enqueue unavailable'})
+   }
+   return {received:true}
+  }catch(e){
+   req.log.warn({category:'plaid_webhook_verification'},'Plaid webhook could not be verified or processed')
+   return reply.code(503).send({error:'Webhook verification unavailable'})
+  }
+ })
+
 }
