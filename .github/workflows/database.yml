@@ -57,6 +57,8 @@ jobs:
         run: psql -X -v ON_ERROR_STOP=1 -f supabase/tests/milestone7_regression.sql
       - name: Run Milestone 7 OCR quota regression
         run: psql -X -v ON_ERROR_STOP=1 -f supabase/tests/milestone7_ocr_regression.sql
+      - name: Run Milestone 7 reminder regression
+        run: psql -X -v ON_ERROR_STOP=1 -f supabase/tests/milestone7_reminders_regression.sql
       - name: Verify database backup and disaster recovery restore
         shell: bash
         run: |
