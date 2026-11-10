@@ -80,8 +80,8 @@ begin
   -- Lock the business to serialize any concurrent claim/processing.
   perform 1 from public.organizations where id=v.organization_id for update skip locked;
   if not found then continue;end if;
-  select * into v_state from public.invoice_reminder_states
-    where organization_id=v.organization_id and invoice_id=v.id for update;
+  select * into v_state from public.invoice_reminder_states st
+    where st.organization_id=v.organization_id and st.invoice_id=v.id for update;
   if found and ((v_state.reserved_at is not null and
     v_state.reserved_at>now()-interval '30 minutes')
    or (v_state.next_eligible_on is not null and v_state.next_eligible_on>current_date))
