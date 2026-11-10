@@ -8,6 +8,7 @@ set local role authenticated;
 do $test$
 declare v_org uuid;v_batch uuid;v_bank uuid;v_invoice uuid;v_result jsonb;
 v_checks jsonb;v_payment uuid;v_total numeric;v_failed boolean;
+ v_trial uuid;v_balance uuid;v_profit uuid;v_ar uuid;v_ap uuid;
 begin
  perform set_config('request.jwt.claim.sub','88888888-8888-4888-8888-888888888881',true);
  v_org:=public.create_organization('M8 Migration Acceptance');
@@ -57,7 +58,37 @@ begin
  select coalesce(sum(total_debits-total_credits),0) into v_total
   from public.ledger_trial_balance(v_org,current_date);
  if v_total<>0 then raise exception 'Imported ledger is unbalanced';end if;
+ v_trial:=public.store_migration_source_report(v_org,v_batch,'TrialBalance',
+  date_trunc('year',current_date)::date,current_date,
+  '{"Header":{"ReportName":"TrialBalance"},"Rows":{"Row":[]}}'::jsonb,repeat('a',64));
+ v_balance:=public.store_migration_source_report(v_org,v_batch,'BalanceSheet',
+  date_trunc('year',current_date)::date,current_date,
+  '{"Header":{"ReportName":"BalanceSheet"},"Rows":{"Row":[]}}'::jsonb,repeat('b',64));
+ v_profit:=public.store_migration_source_report(v_org,v_batch,'ProfitAndLoss',
+  date_trunc('year',current_date)::date,current_date,
+  '{"Header":{"ReportName":"ProfitAndLoss"},"Rows":{"Row":[]}}'::jsonb,repeat('c',64));
+ v_ar:=public.store_migration_source_report(v_org,v_batch,'AgedReceivables',
+  date_trunc('year',current_date)::date,current_date,
+  '{"Header":{"ReportName":"AgedReceivables"},"Rows":{"Row":[]}}'::jsonb,repeat('d',64));
+ v_ap:=public.store_migration_source_report(v_org,v_batch,'AgedPayables',
+  date_trunc('year',current_date)::date,current_date,
+  '{"Header":{"ReportName":"AgedPayables"},"Rows":{"Row":[]}}'::jsonb,repeat('e',64));
  v_failed:=false;
+ begin perform public.record_migration_reconciliation(v_org,v_batch,'accounts_receivable',
+    75,74,v_ar,'Deliberately invalid target amount');
+ exception when others then v_failed:=true;end;
+ if not v_failed then raise exception 'Unverified reconciliation target amount accepted';end if;
+ perform public.record_migration_reconciliation(v_org,v_batch,'trial_balance',100,100,v_trial,'Debit trial balance source checked');
+ perform public.record_migration_reconciliation(v_org,v_batch,'accounts_receivable',75,75,v_ar,'Source aged receivables checked');
+ perform public.record_migration_reconciliation(v_org,v_batch,'accounts_payable',0,0,v_ap,'Source payable list verified');
+ perform public.record_migration_reconciliation(v_org,v_batch,'bank_cash',25,25,v_balance,'Cash and bank balances checked');
+ perform public.record_migration_reconciliation(v_org,v_batch,'gst_hst',0,0,v_balance,'Tax liability balances reviewed');
+ perform public.record_migration_reconciliation(v_org,v_batch,'historic_profit_loss',100,100,v_profit,'Profit and loss period reviewed');
+ perform public.accept_migration_financial_cutover(v_org,v_batch);
+ if not exists(select 1 from public.migration_batches where organization_id=v_org
+ and id=v_batch and financial_cutover_approved_at is not null)
+ then raise exception 'Financial cutover approval not persisted';end if;
+  v_failed:=false;
  begin perform public.stage_migration_records(v_org,v_batch,'customer',jsonb_build_array(
   jsonb_build_object('source_id','qbo-customer','name','Wrong overwrite')));
  exception when others then v_failed:=true;end;
