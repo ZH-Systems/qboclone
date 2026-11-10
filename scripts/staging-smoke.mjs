@@ -34,7 +34,8 @@ for(const [path,method] of [
  ['/automation/recurring/run','POST'],
  ['/automation/reminders/run','POST'],
  ['/qbo/connect/callback','GET'],
- ['/stripe/webhook','POST']]){
+ ['/stripe/webhook','POST'],
+ ['/bank-feeds/plaid-webhook','POST']]){
  await probe(path,{method,headers:{'Content-Type':'application/json'},body:method==='POST'?'{}':undefined},false)
 }
 const standardHeaders={'Content-Type':'application/json'}
@@ -68,7 +69,8 @@ for(const [jwt,own,other] of [[jwtA,orgA,orgB],[jwtB,orgB,orgA]]){
   if(result.error)throw new Error(table+' RLS query failed: '+result.error.message)
   assert.equal(result.data?.length,0,table+' exposed cross-tenant rows')
  }
- for(const table of ['bank_feed_connections','qbo_connections','qbo_oauth_states','bank_feed_link_sessions']){
+ for(const table of ['bank_feed_connections','qbo_connections','qbo_oauth_states',
+   'bank_feed_link_sessions','bank_feed_update_sessions']){
   const attempt=await db.from(table).select('*').limit(1)
   assert(attempt.error,'Authenticated user should never query server-only table '+table)
  }
