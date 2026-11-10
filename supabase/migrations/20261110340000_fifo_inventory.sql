@@ -16,6 +16,7 @@ create table public.inventory_products(
 );
 create table public.inventory_receipts(
  id uuid primary key default gen_random_uuid(),
+ fifo_sequence bigint generated always as identity unique,
  receipt_sequence bigint generated always as identity,
  organization_id uuid not null,
  product_id uuid not null,
@@ -65,7 +66,7 @@ create table public.inventory_issue_lots(
  foreign key(organization_id,issue_id) references public.inventory_issues(organization_id,id),
  foreign key(organization_id,receipt_id) references public.inventory_receipts(organization_id,id)
 );
-create index inventory_fifo_idx on public.inventory_receipts(organization_id,product_id,received_on,created_at,id)
+create index inventory_fifo_idx on public.inventory_receipts(organization_id,product_id,received_on,fifo_sequence)
  where remaining_quantity>0;
 create index inventory_issues_product_idx on public.inventory_issues(organization_id,product_id,issued_on);
 alter table public.inventory_products enable row level security;
