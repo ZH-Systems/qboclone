@@ -5,6 +5,8 @@ export type ExportTable = { name:string; columns:string; data: Record<string,unk
 export const EXPORT_TABLES:ReadonlyArray<{name:string;columns:string}>=[
  {name:'organizations',columns:'id,name,base_currency,created_at'},
  {name:'organization_members',columns:'organization_id,user_id,role,created_at'},
+ {name:'organization_invitations',columns:'id,organization_id,invited_email,role,created_at,expires_at,accepted_at,revoked_at'},
+ {name:'organization_subscriptions',columns:'organization_id,plan_code,status,current_period_end,cancel_at_period_end,updated_at'},
  {name:'accounts',columns:'id,organization_id,code,name,account_type,normal_balance,is_active,created_at'},
  {name:'fiscal_periods',columns:'id,organization_id,start_date,end_date,is_locked'},
  {name:'contacts',columns:'id,organization_id,contact_kind,display_name,email,created_at'},
