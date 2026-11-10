@@ -2,6 +2,8 @@ import {useCallback,useEffect,useMemo,useState,type FormEvent} from 'react'
 import {supabase} from './lib/supabase'
 import {formatMoney} from './lib/accounting'
 import {parseBankCsv,parseSignedMoney} from './lib/bankCsv'
+import {normalizeBankStatement,type BankColumnMap} from './lib/bankImportMapping'
+import {parseCsvRecords} from './lib/importCsv'
 
 type Props={organizationId:string;mode:'tax'|'banking';notify:(message:string,isError?:boolean)=>void}
 type Account={id:string;code:string;name:string;account_type:string;is_bank_account:boolean}
@@ -34,6 +36,9 @@ export default function TaxBankWorkspace({organizationId,mode,notify}:Props){
   const [closing,setClosing]=useState('0.00')
   const [activeStatement,setActiveStatement]=useState('')
   const [csv,setCsv]=useState('')
+  const [sourceBankCsv,setSourceBankCsv]=useState('')
+  const [bankColumns,setBankColumns]=useState<string[]>([])
+  const [bankMapping,setBankMapping]=useState<BankColumnMap>({date:'',description:'',amount:'',debit:'',credit:'',reference:'',dateFormat:'iso'})
   const [selectedMatches,setSelectedMatches]=useState<Record<string,string>>({})
   const [preview,setPreview]=useState('')
   const refresh=useCallback(async()=>{
@@ -89,6 +94,28 @@ export default function TaxBankWorkspace({organizationId,mode,notify}:Props){
     await refresh();setActiveStatement(data as string);notify('Bank statement opened.')
   })}
   const current=statements.find(x=>x.id===activeStatement)
+  const readBankFile=(file:File|null)=>void run(async()=>{
+    if(!file)return
+    if(file.size>4*1024*1024)throw new Error('Bank statement CSV is limited to 4 MiB')
+    const text=await file.text()
+    const records=parseCsvRecords(text)
+    if(!records.length)throw new Error('Bank CSV is empty')
+    const cols=records[0].map(x=>x.trim())
+    setSourceBankCsv(text);setBankColumns(cols)
+    const find=(...options:string[])=>cols.find(h=>options.some(x=>x===h.toLowerCase()))||''
+    setBankMapping({
+     date:find('date','transaction date','txn date'),description:find('description','narrative','details'),
+     amount:find('amount','transaction amount'),debit:find('debit','withdrawal','money out'),
+     credit:find('credit','deposit','money in'),reference:find('reference','transaction id'),
+     dateFormat:'iso'
+    })
+    notify('Statement file loaded. Confirm the date format and column mapping before normalizing.')
+  })
+  const normalizeBankFile=()=>void run(async()=>{
+    const standardized=normalizeBankStatement(sourceBankCsv,bankMapping)
+    setCsv(standardized)
+    notify('Mapped '+parseBankCsv(standardized).length+' bank rows to the canonical CSV format. Review before importing.')
+  })
   const importCsv=()=>void run(async()=>{
     if(!supabase||!current)return
     if(current.status!=='open')throw new Error('Reconciled statements cannot be changed.')
@@ -152,7 +179,18 @@ export default function TaxBankWorkspace({organizationId,mode,notify}:Props){
       <div className="card workspace-form"><h2>Bank statement workspace</h2><label className="field-label">Select statement<select value={activeStatement} onChange={e=>setActiveStatement(e.target.value)}><option value="">Choose a statement</option>{statements.map(s=><option key={s.id} value={s.id}>{s.start_date} to {s.end_date} · {accounts.find(a=>a.id===s.bank_account_id)?.name||'Account'} · {s.status}</option>)}</select></label>
       {current&&<><div className="bank-summary"><span>Opening <strong>{formatMoney(Math.round(Number(current.opening_balance)*100))}</strong></span><span>Imported change <strong>{formatMoney(importedSum)}</strong></span><span>Expected closing <strong>{formatMoney(Math.round(Number(current.closing_balance)*100))}</strong></span><span>Unmatched <strong>{activeRows.length}</strong></span></div>
       {current.status==='open'&&<><p className="workspace-disclaimer">CSV format: date,description,amount,reference. Dates must be YYYY-MM-DD; positive amounts are deposits, negative amounts are withdrawals. Preserve row order when reimporting the same file. Imports are capped at 500 rows per batch.</p>
-      <label className="field-label">Statement CSV<textarea rows={5} value={csv} onChange={e=>setCsv(e.target.value)} placeholder={'date,description,amount,reference\n2026-11-01,Client payment,113.00,INV-001'}/></label><div className="workspace-toolbar"><button className="primary" disabled={busy||!csv.trim()} onClick={importCsv}>Import CSV rows</button><button type="button" disabled={busy||rows.length===0} onClick={resetImport}>Reset imported rows</button><button className="primary" disabled={busy||rows.length===0||activeRows.length>0} onClick={reconcile}>Reconcile statement</button></div></>}
+      <div className="bank-mapper"><h3>Import another bank's CSV format</h3>
+      <p>Select column mappings and an explicit date format, then normalize the file. You can review the canonical rows before importing.</p>
+      <input type="file" accept=".csv,text/csv" onChange={e=>void readBankFile(e.target.files?.[0]||null)}/>
+      {sourceBankCsv&&<div className="workspace-fields">
+        {([['date','Transaction date'],['description','Description'],['amount','Signed amount (optional)'],['debit','Debit / withdrawal'],['credit','Credit / deposit'],['reference','Reference (optional)']] as [keyof BankColumnMap,string][]).map(([key,title])=>
+          <label key={key}>{title}<select value={bankMapping[key]} onChange={e=>setBankMapping({...bankMapping,[key]:e.target.value})}><option value="">None</option>{bankColumns.map(x=><option key={x} value={x}>{x}</option>)}</select></label>)}
+        <label>Date convention<select value={bankMapping.dateFormat} onChange={e=>setBankMapping({...bankMapping,dateFormat:e.target.value as BankColumnMap['dateFormat']})}>
+          <option value="iso">YYYY-MM-DD</option><option value="mdy">MM/DD/YYYY</option><option value="dmy">DD/MM/YYYY</option>
+        </select></label>
+       </div>}
+       {sourceBankCsv&&<button type="button" disabled={busy} onClick={normalizeBankFile}>Normalize mapped CSV</button>}
+      </div><label className="field-label">Statement CSV<textarea rows={5} value={csv} onChange={e=>setCsv(e.target.value)} placeholder={'date,description,amount,reference\n2026-11-01,Client payment,113.00,INV-001'}/></label><div className="workspace-toolbar"><button className="primary" disabled={busy||!csv.trim()} onClick={importCsv}>Import CSV rows</button><button type="button" disabled={busy||rows.length===0} onClick={resetImport}>Reset imported rows</button><button className="primary" disabled={busy||rows.length===0||activeRows.length>0} onClick={reconcile}>Reconcile statement</button></div></>}
       <div className="table-wrap"><table><thead><tr><th>#</th><th>Date</th><th>Description</th><th>Bank change</th><th>Match</th></tr></thead><tbody>{rows.map(r=><tr key={r.id}><td>{r.line_number}</td><td>{r.transaction_date}</td><td>{r.description}</td><td>{formatMoney(Math.round(Number(r.signed_amount)*100))}</td><td>{r.matched_journal_entry_id?<><span className="status">Matched</span>{current.status==='open'&&<button className="link-button" disabled={busy} onClick={()=>unmatch(r)}>Unmatch</button>}</>:current.status==='open'?<div className="row-actions"><select value={selectedMatches[r.id]||''} onChange={e=>setSelectedMatches({...selectedMatches,[r.id]:e.target.value})}><option value="">Choose journal</option>{candidates(r).map(j=><option key={j.id} value={j.id}>{j.entry_date} · {j.memo.slice(0,42)}</option>)}</select><button disabled={busy||!selectedMatches[r.id]} onClick={()=>match(r)}>Match</button></div>:'Unmatched'}</td></tr>)}{rows.length===0&&<tr><td colSpan={5}><div className="empty">No imported transactions.</div></td></tr>}</tbody></table></div></>}</div>
     </>}
   </section>
