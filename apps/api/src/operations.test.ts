@@ -11,7 +11,7 @@ describe('milestone 5 security boundaries',()=>{
   expect(requireOrganizationId('11111111-1111-4111-8111-111111111111')).toContain('1111')
  })
  it('escapes formula injection and CSV punctuation',()=>{
-  expect(csvEscape('=SUM(1,1)')).toBe("'=SUM(1,1)")
+  expect(csvEscape('=SUM(1,1)')).toBe("\"'=SUM(1,1)\"")
   expect(csvEscape('name,other')).toBe('"name,other"')
  })
  it('keeps invitation token in URL fragment, not request path',()=>{
