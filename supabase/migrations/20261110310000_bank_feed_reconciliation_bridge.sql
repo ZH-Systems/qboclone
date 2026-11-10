@@ -80,13 +80,11 @@ begin
  end loop;
  v_imported:=public.import_bank_statement_rows(p_org,p_statement,v_rows);
  if v_imported<>v_count then raise exception 'Unexpected deduplication of new bank feed staging rows';end if;
- for v_line in (v_current-v_count+1)..v_current loop
+ for v_line,v_id in select (v_current-v_count+item.ordinality)::integer,item.txn_id
+  from unnest(p_feed_transaction_ids) with ordinality as item(txn_id,ordinality)
+ loop
   select id into strict v_bt from public.bank_transactions
    where organization_id=p_org and statement_id=p_statement and line_number=v_line;
-  -- Map by original provider ID from deterministic reference.
-  select id into strict v_id from public.bank_feed_transactions
-   where organization_id=p_org and provider_transaction_id=substring((
-    select reference from public.bank_transactions where id=v_bt) from 7);
   insert into public.bank_feed_import_links(organization_id,feed_transaction_id,
    bank_transaction_id,imported_by)
   values(p_org,v_id,v_bt,auth.uid());
