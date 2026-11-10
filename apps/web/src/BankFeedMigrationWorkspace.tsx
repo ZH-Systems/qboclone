@@ -259,7 +259,8 @@ export default function BankFeedMigrationWorkspace({organizationId,role,notify}:
   const raw=JSON.parse(await sourceFile.text()) as unknown
   if(!raw||typeof raw!=='object'||Array.isArray(raw))throw new Error('JSON bundle must be an object keyed by entity type')
   const supported=['account','customer','vendor','tax_code','invoice','bill','credit_note','vendor_credit',
-   'payment','bill_payment','journal','opening_balance','attachment','bank_transaction']
+   'payment','bill_payment','journal','opening_balance','attachment','bank_transaction',
+   'inventory_item','purchase','deposit','sales_receipt','refund_receipt','transfer','estimate','purchase_order']
   let inserted=0
   for(const [kind,records] of Object.entries(raw)){
    if(!supported.includes(kind)||!Array.isArray(records))throw new Error('Invalid migration collection: '+kind)
