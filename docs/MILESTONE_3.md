@@ -1,7 +1,7 @@
 # Milestone 3: Tax configurations, posting controls and bank reconciliation
 
 ## Status
-Implemented on the `feat/milestone-3-tax-banking-controls` branch, pending automated validation. **Not approved for production accounting or tax filing.**
+Implemented on the `feat/milestone-3-tax-banking-controls` branch. GitHub Actions successfully runs `npm run verify` and applies all accounting migrations plus Milestone 2 and 3 rollback-safe SQL regressions on PostgreSQL 17. These checks use a synthetic Auth compatibility schema, **not** a live Supabase environment. **Not approved for production accounting or tax filing.**
 
 ## Migration order
 Apply all earlier migrations, then the following in filename order, in a disposable Supabase development database:
