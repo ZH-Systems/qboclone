@@ -21,6 +21,7 @@ export default function BusinessAdministration({organizationId,role,notify}:Prop
  const [email,setEmail]=useState('')
  const [newRole,setNewRole]=useState('bookkeeper')
  const [invitationLink,setInvitationLink]=useState('')
+ const [inviteMethod,setInviteMethod]=useState<'link'|'email'>('link')
  const [busy,setBusy]=useState(false)
  const [acceptToken,setAcceptToken]=useState(()=>new URLSearchParams(window.location.hash.slice(1)).get('invite')||'')
  const canManage=role==='owner'||role==='administrator'
@@ -54,8 +55,10 @@ export default function BusinessAdministration({organizationId,role,notify}:Prop
  useEffect(()=>{void refresh().catch(e=>notify(e.message,true))},[refresh])
  const run=async(work:()=>Promise<void>)=>{setBusy(true);try{await work()}catch(e){notify(e instanceof Error?e.message:String(e),true)}finally{setBusy(false)}}
  const invite=(e:FormEvent)=>{e.preventDefault();void run(async()=>{
-   if(!supabase)return
-   if(apiUrl){
+   if(!supabase)throw new Error('Supabase is not configured')
+   if(!email.trim())throw new Error('Enter the invitee email address')
+   if(inviteMethod==='email'){
+    if(!apiUrl)throw new Error('API service is not configured for email delivery')
     const {data:session,error:authError}=await supabase.auth.getSession()
     if(authError||!session.session)throw new Error('Sign in first')
     const response=await fetch(apiUrl+'/organizations/invite-email',{
@@ -64,7 +67,7 @@ export default function BusinessAdministration({organizationId,role,notify}:Prop
     })
     if(!response.ok){
      const details=await response.json().catch(()=>({error:'Email invitation failed'})) as {error?:string}
-     throw new Error(details.error||'Email invitation failed')
+     throw new Error((details.error||'Email invitation failed')+'. Check Resend credentials and sender domain, or switch to secure invitation link.')
     }
     setInvitationLink('');setEmail('')
     await refresh();notify('Invitation email submitted to the provider.')
@@ -145,8 +148,9 @@ export default function BusinessAdministration({organizationId,role,notify}:Prop
    <div className="card"><div className="card-head"><div><h2>Team and accountant access</h2><p>Members can belong to multiple businesses, each with a separate role.</p></div></div>
     <div className="table-wrap"><table><thead><tr><th>Email</th><th>Role</th><th>Joined</th><th>Actions</th></tr></thead><tbody>{members.map(m=><tr key={m.user_id}><td className="strong">{m.email}</td><td className="capitalize">{m.role}</td><td>{m.joined_at.slice(0,10)}</td><td>{canManage&&m.role!=='owner'?<div className="row-actions"><select aria-label={'Role for '+m.email} disabled={busy||role!=='owner'&&m.role==='administrator'} value={m.role} onChange={e=>changeRole(m.user_id,e.target.value)}>{roles.filter(r=>role==='owner'||r!=='administrator').map(r=><option key={r} value={r}>{r}</option>)}</select><button type="button" disabled={busy||role!=='owner'&&m.role==='administrator'} onClick={()=>remove(m.user_id)}>Remove</button></div>:'Protected'}</td></tr>)}</tbody></table></div>
    </div>
-   {canManage&&<form className="card workspace-form" onSubmit={invite}><h2>Invite a team member</h2><div className="workspace-fields"><label>Email<input type="email" required value={email} onChange={e=>setEmail(e.target.value)}/></label><label>Role<select value={newRole} onChange={e=>setNewRole(e.target.value)}>{roles.filter(r=>role==='owner'||r!=='administrator').map(r=><option key={r} value={r}>{r}</option>)}</select></label><button className="primary" disabled={busy}>Create invitation</button></div>
+   {canManage&&<form className="card workspace-form" onSubmit={invite}><h2>Invite a team member</h2><div className="workspace-fields"><label>Email<input type="email" required value={email} onChange={e=>setEmail(e.target.value)}/></label><label>Role<select value={newRole} onChange={e=>setNewRole(e.target.value)}>{roles.filter(r=>role==='owner'||r!=='administrator').map(r=><option key={r} value={r}>{r}</option>)}</select></label><label>Delivery<select value={inviteMethod} onChange={e=>setInviteMethod(e.target.value as 'link'|'email')}><option value="link">Secure invitation link</option><option value="email">Send email via Resend</option></select></label><button className="primary" disabled={busy}>{busy?'Working…':'Create invitation'}</button></div>
    {invitationLink&&<div className="invitation-token"><label>Private invitation URL<input value={invitationLink} readOnly/></label><button type="button" onClick={()=>void navigator.clipboard.writeText(invitationLink)}>Copy link</button><p>Share securely. Only the intended verified email can redeem it; the token expires after seven days.</p></div>}
+   <p className="muted">The link method does not depend on Resend. Send the generated link privately to the exact email entered above. Additional members require an eligible subscription with available seats.</p>
    <h3>Pending invitations</h3><div className="table-wrap"><table><thead><tr><th>Email</th><th>Role</th><th>Expires</th><th>Status</th><th>Action</th></tr></thead><tbody>{invitations.map(i=><tr key={i.id}><td>{i.invited_email}</td><td>{i.role}</td><td>{i.expires_at.slice(0,10)}</td><td>{i.accepted_at?'Accepted':i.revoked_at?'Revoked':'Pending'}</td><td>{!i.accepted_at&&!i.revoked_at&&<button type="button" className="link-button" disabled={busy} onClick={()=>revoke(i.id)}>Revoke</button>}</td></tr>)}</tbody></table></div></form>}
    <div className="card workspace-form"><h2>Subscription and feature access</h2><p>Current plan: <strong>{subscription?.plan_code||'Unsubscribed'}</strong>, status: <strong>{subscription?.status||'none'}</strong>.</p><p>Member seats: {members.length} of {String(entitlements?.users||1)}. Subscription limits are enforced on invitation acceptance.</p><p>Bank import usage this month: <strong>{usage?.used??0} of {usage?.limit??500} rows</strong>. Imports exceeding the limit are rejected by the database.</p>
    {subscription?.current_period_end&&<p>Current period ends: {subscription.current_period_end.slice(0,10)}.</p>}

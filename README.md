@@ -19,6 +19,10 @@ The repository implements an integrated **development** platform:
 
 See the [architecture](docs/ARCHITECTURE.md) and [operational readiness](docs/MILESTONE_10.md) before enabling real accounts.
 
+## Platform administrators and invitations
+
+Platform superadmins can provision organizations for already verified user accounts through a service-authorized operator interface. Platform privileges are separate from tenant finance permissions, and **must be bootstrapped privately in Supabase SQL Editor**, not granted by client signup. Organization owners and administrators can create secure one-time invitation links independently of the Resend email provider. Additional members still require an active subscription with available seats. See [platform administration and bootstrap](docs/PLATFORM_ADMINISTRATION.md) for setup and [Milestone 4 administration](docs/MILESTONE_4.md) for the underlying tenant roles.
+
 ## Development setup
 
 1. Create a Supabase project intended for development only.
