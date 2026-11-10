@@ -14,7 +14,7 @@ FX limitations: this is not an IAS 21-compliant multi-currency subledger. No per
 
 **4. Canadian provincial sales-tax reference previews.** Provides selectable, separately displayed BC PST, Manitoba RST, Saskatchewan PST and Quebec QST reference calculations alongside existing federal GST/HST rates. These are date-aware informational estimates, not a verified combined tax engine or statutory reporting module. Users must determine tax applicability, registration, nexus, place of supply, exemptions, combined tax bases, recoverability and applicable rates. This feature does not automatically post provincial liabilities or generate filing returns.
 
-**5. QuickBooks inventory catalog mapping.** The QuickBooks source normalizer retains item SKU, name, source type, original quantity on hand, purchase cost and asset account reference. An accountant-approved batch imports only validated inventory SKUs, preserving a source-to-target crosswalk. It **does not automatically post stock balances** or invent FIFO source lots from a QBO snapshot. Historical inventory valuation must be reconciled to source inventory reports and imported with a separate supported opening stock workflow before live inventory operations.
+**5. QuickBooks inventory catalog mapping.** The QuickBooks source normalizer retains item SKU, name, source type, original quantity on hand, purchase cost and asset account reference. An accountant-approved batch imports only validated inventory SKUs, preserving a source-to-target crosswalk. It **does not automatically post stock balances** or invent FIFO source lots from a QBO snapshot. Historical inventory valuation must be reconciled to source inventory reports. The `register_inventory_opening_lots` workflow accepts costed opening lots **only after** the one-time opening-balance journal has already debited Inventory Asset for the identical total cost. This registers quantities without double-posting that asset.
 
 ## Deployment
 
@@ -24,7 +24,7 @@ Apply following all merged Milestone 1–8 migrations, ordered by filename:
 - `20261110350000_vendor_advances.sql`
 - `20261110360000_fx_settlements.sql`
 - `20261110370000_provincial_tax_preview.sql`
-- `20261110380000_inventory_migration_protection.sql`
+- `20261110380000_inventory_migration_opening.sql`
 
 The Advanced Accounting workspace includes Inventory, Vendor Advances, Foreign Currency and Provincial Tax Estimate views, in addition to previous accounting workflows. The QuickBooks migration workspace includes safe inventory SKU import. These features require the existing Supabase account/tenant setup and valid open fiscal periods.
 
@@ -36,7 +36,7 @@ The CI database pipeline applies every ordered migration to PostgreSQL 17 and ru
 - Vendor advance receipt, application, refund and outstanding payable.
 - CAD recognition, foreign settlement, realized FX differences, idempotency.
 - Provincial tax reference calculations, date filtering and access controls.
-- QBO product mapping with **no automatic stock quantity/value posting**.
+- QBO product mapping with **no automatic source stock quantity/value posting**, plus reconciliation of approved opening lots against the posted inventory asset opening journal.
 - PostgreSQL backup/archive and isolated restore rehearsal.
 
 Front-end/API TypeScript, Vitest, and production builds run through the existing web validation workflow.
