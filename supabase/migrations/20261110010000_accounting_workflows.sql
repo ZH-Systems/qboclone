@@ -264,7 +264,7 @@ begin
     where id=p_source_document_id and organization_id=p_organization_id and status='posted'
     for update;
     if not found or v_source.contact_id<>p_contact_id or
-       v_source.document_type<>case when p_type='credit_note' then 'invoice' else 'bill' end then
+       v_source.document_type<>(case when p_type='credit_note' then 'invoice' else 'bill' end) then
       raise exception 'Credit must reference a posted document for this contact';
     end if;
   elsif p_source_document_id is not null then raise exception 'Only credits may reference another document';
