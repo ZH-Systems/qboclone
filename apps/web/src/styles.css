@@ -46,3 +46,20 @@
 .row-actions select{min-width:180px;max-width:270px}
 @media(max-width:1250px){.workspace-line{grid-template-columns:repeat(3,minmax(0,1fr))}.bank-summary{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:760px){.workspace-line{grid-template-columns:repeat(2,minmax(0,1fr))}.bank-summary{grid-template-columns:1fr 1fr}.accounting-workspace .workspace-fields{grid-template-columns:1fr 1fr}.row-actions select{max-width:175px;min-width:120px}}
+
+/* Milestone 4 SaaS administration */
+.admin-panels{margin-top:26px;display:grid;gap:20px}
+.admin-panels .workspace-form{padding:23px}
+.admin-panels .table-wrap{max-height:450px;overflow:auto}
+.admin-panels .row-actions select{min-width:130px}
+.admin-panels .invitation-token{border:1px solid #cce2ff;background:#f4f9ff;padding:14px;border-radius:10px;display:grid;gap:10px}
+.admin-panels .invitation-token label{display:grid;gap:6px;color:#39577c;font-size:12px;font-weight:650}
+.admin-panels .invitation-token input{width:100%}
+.admin-panels .invitation-token button,.plan-card button{border:1px solid #c9d9ef;background:white;padding:9px 13px;border-radius:8px;color:#2469bf;font-size:12px;font-weight:700;justify-self:start}
+.admin-panels .plan-cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.admin-panels .plan-card{padding:17px;border:1px solid #e3ebf4;border-radius:10px;display:grid;gap:10px;align-content:start}
+.admin-panels .plan-card h3{margin:0;font-size:16px}
+.admin-panels .plan-card strong{font-size:20px;color:#1f3451}
+.admin-panels .plan-card p{font-size:12px}
+.admin-panels button{max-width:100%}
+@media(max-width:900px){.admin-panels .plan-cards{grid-template-columns:1fr}}
