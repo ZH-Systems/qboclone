@@ -1,4 +1,4 @@
-import {createCipheriv,createDecipheriv,randomBytes,createHash,timingSafeEqual} from 'node:crypto'
+import {createCipheriv,createDecipheriv,randomBytes,createHash,timingSafeEqual,createPublicKey,verify as cryptoVerify} from 'node:crypto'
 export type PlaidTransaction={transaction_id:string;account_id:string;date:string;name:string;amount:number;pending?:boolean}
 export type PlaidPage={added:PlaidTransaction[];modified:PlaidTransaction[];removed:{transaction_id:string}[];next_cursor:string;has_more:boolean}
 export type PlaidAccount={account_id:string;name:string;mask:string|null;iso_currency_code:string|null;unofficial_currency_code:string|null}
