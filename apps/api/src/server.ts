@@ -1,15 +1,22 @@
 import 'dotenv/config'
 import Fastify from 'fastify'
 import cors from '@fastify/cors'
+import rateLimit from '@fastify/rate-limit'
+import helmet from '@fastify/helmet'
+import {createHash} from 'node:crypto'
 import Stripe from 'stripe'
 import {createClient} from '@supabase/supabase-js'
 import {readConfig} from './config.js'
+import {bearerToken,requireOrganizationId,requireOrganizationRole,scopedSupabase,buildOrganizationExport} from './operations.js'
+import {sendInvitationEmail} from './email.js'
 import {requireOwner,resolvePrice,subscriptionOrganization,subscriptionPrice,paymentStatus,subscriptionPeriodEnd} from './billing.js'
 const config=readConfig()
 const stripe=new Stripe(config.stripeKey)
 const db=createClient(config.supabaseUrl,config.serviceRoleKey,{auth:{persistSession:false,autoRefreshToken:false}})
-const app=Fastify({logger:true,bodyLimit:1024*1024})
+const app=Fastify({logger:{redact:['req.headers.authorization','req.headers.stripe-signature','req.body']},bodyLimit:1024*1024,trustProxy:config.trustedProxyCidrs})
 await app.register(cors,{origin:config.webOrigin,methods:['GET','POST'],allowedHeaders:['Authorization','Content-Type']})
+await app.register(helmet,{contentSecurityPolicy:false})
+await app.register(rateLimit,{global:false})
 
 async function userFromBearer(header:string|undefined):Promise<string>{
   const match=/^Bearer (\S+)$/.exec(header||'')
@@ -23,11 +30,18 @@ function isUuid(value:unknown):value is string {
 }
 function routeError(reply:any,e:unknown){
   const msg=e instanceof Error?e.message:'Unexpected server error'
-  if(/(required|Invalid|Unknown|not configured|owner role)/i.test(msg))return reply.code(400).send({error:msg})
+  if(/(Not authorized|owner role required)/i.test(msg))return reply.code(403).send({error:'Insufficient organization permissions'})
+  if(/not configured/i.test(msg))return reply.code(503).send({error:'The requested provider integration is not configured'})
+  if(/(required|Invalid|Unknown)/i.test(msg))return reply.code(400).send({error:msg})
   app.log.error(e)
   return reply.code(500).send({error:'Billing operation failed'})
 }
 app.get('/health',async()=>({status:'ok'}))
+app.get('/ready',async(_req,reply)=>{
+  const {error}=await db.from('subscription_plans').select('code').limit(1)
+  if(error)return reply.code(503).send({status:'unavailable'})
+  return {status:'ready'}
+})
 
 // Explicit raw-body handling for Stripe's cryptographic signature verification.
 app.removeContentTypeParser('application/json')
@@ -38,6 +52,69 @@ function jsonInput(raw:unknown):Record<string,unknown>{
   if(!obj||typeof obj!=='object'||Array.isArray(obj))throw new Error('Invalid JSON object')
   return obj as Record<string,unknown>
 }
+
+/** Sends invitations without returning raw bearer tokens to the browser. */
+app.post('/organizations/invite-email',{config:{rateLimit:{max:8,timeWindow:'1 minute'}}},async(req,reply)=>{
+ try{
+  const jwt=bearerToken(req.headers.authorization)
+  const user=await userFromBearer(req.headers.authorization)
+  const input=jsonInput(req.body)
+  const org=requireOrganizationId(input.organizationId)
+  const email=typeof input.email==='string'?input.email.trim().toLowerCase():''
+  const role=typeof input.role==='string'?input.role:''
+  await requireOrganizationRole(db,user,org,['owner','administrator'])
+  if(!config.emailApiKey||!config.emailFrom)throw new Error('Invitation email provider not configured')
+  const {data:business,error:orgError}=await db.from('organizations').select('name').eq('id',org).single()
+  if(orgError||!business)throw new Error('Organization lookup failed')
+  const scoped=scopedSupabase(config.supabaseUrl,config.serviceRoleKey,jwt)
+  const {data:token,error}=await scoped.rpc('invite_organization_member',{
+    p_org:org,p_email:email,p_role:role
+  })
+  if(error||typeof token!=='string')throw new Error(error?.message||'Invitation could not be created')
+  try{
+   await sendInvitationEmail({apiKey:config.emailApiKey,from:config.emailFrom,
+     webOrigin:config.webOrigin},email,business.name,role,token)
+  }catch(mailError){
+   // An undelivered bearer token must not remain active.
+   const digest=createHash('sha256').update(token).digest('hex')
+   const {data:invitation}=await db.from('organization_invitations').select('id')
+     .eq('organization_id',org).eq('token_hash',digest).maybeSingle()
+   if(invitation){
+    const {error:revokeError}=await scoped.rpc('revoke_organization_invitation',{
+      p_org:org,p_invitation:invitation.id
+    })
+    if(revokeError)req.log.error({message:'Failed to revoke an undelivered invitation',invitationId:invitation.id})
+   }
+   throw mailError
+  }
+  return {sent:true}
+ }catch(e){return routeError(reply,e)}
+})
+
+/** Server-filtered tenant data export with an explicit nontruncating row cap. */
+app.post('/organizations/export',{config:{rateLimit:{max:2,timeWindow:'1 hour'}}},async(req,reply)=>{
+ try{
+  const jwt=bearerToken(req.headers.authorization)
+  const user=await userFromBearer(req.headers.authorization)
+  const org=requireOrganizationId(jsonInput(req.body).organizationId)
+  await requireOrganizationRole(db,user,org,['owner','administrator','accountant'])
+  const payload=await buildOrganizationExport(db,org,10000)
+  if(Buffer.byteLength(JSON.stringify(payload),'utf8')>20*1024*1024)
+   return reply.code(413).send({error:'Export exceeds 20 MiB; use archival export'})
+  const scoped=scopedSupabase(config.supabaseUrl,config.serviceRoleKey,jwt)
+  const {error}=await scoped.rpc('record_organization_export',{p_organization_id:org})
+  if(error)throw new Error('Unable to record export audit event')
+  return reply.header('Content-Type','application/json; charset=utf-8')
+   .header('Content-Disposition','attachment; filename="organization-'+org+'.json"')
+   .header('Cache-Control','private, no-store')
+   .send(payload)
+ }catch(e){
+  if(e instanceof Error&&e.message.includes('Export row limit exceeded'))
+   return reply.code(413).send({error:e.message})
+  return routeError(reply,e)
+ }
+})
+
 app.post('/billing/checkout',async(req,reply)=>{
   try{
     const user=await userFromBearer(req.headers.authorization)

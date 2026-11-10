@@ -68,6 +68,15 @@ The backend is a separate deployment, not a Vercel frontend function. Never plac
 
 **Commercial readiness:** current tenant data, financial logic, tax setup, bank imports and subscription operations require independent validation. Do not use this development version for regulatory filings or real business books yet.
 
+## Milestone 5: Operational hardening
+
+The latest development milestone adds server-enforced bank import quotas, Resend invitation emails, authenticated organization JSON exports, account password recovery, expanded immutable audit history, API rate limits, health/readiness endpoints and backup/restore testing.
+
+- [Milestone 5 implementation and validation](docs/MILESTONE_5.md)
+- [Operations and recovery runbook](docs/OPERATIONS_RUNBOOK.md)
+
+The production deployment requires configured Supabase Auth, Resend and Stripe test-mode integrations. CI validates PostgreSQL and application code but does not substitute for an actual Supabase/Stripe/Resend integration test or regulatory review.
+
 ## Scope for next phase
 
 - Financial reporting over complete journals

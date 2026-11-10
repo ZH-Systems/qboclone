@@ -63,3 +63,8 @@
 .admin-panels .plan-card p{font-size:12px}
 .admin-panels button{max-width:100%}
 @media(max-width:900px){.admin-panels .plan-cards{grid-template-columns:1fr}}
+
+/* Milestone 5 audit pagination and owner export */
+.admin-panels .audit-pager{display:flex;align-items:center;justify-content:flex-end;gap:12px;padding:15px 20px;font-size:12px;color:#6c7d95}
+.admin-panels .audit-pager button{border:1px solid #d6e0ec;border-radius:8px;background:white;color:#2769c5;padding:8px 12px;font-weight:650}
+.admin-panels .audit-pager button:disabled{color:#a0aab6;cursor:not-allowed}
