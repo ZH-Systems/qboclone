@@ -122,12 +122,12 @@ begin
    where id=v_rule.organization_id returning document_sequence into v_seq;
   insert into public.financial_documents(organization_id,contact_id,document_type,
     document_number,issue_date,due_date,memo,source_document_id,created_by,
-    subtotal,tax_total,total)
+    subtotal,tax_total)
   values(v_rule.organization_id,v_source.contact_id,v_source.document_type,
    (case when v_source.document_type='invoice' then 'INV-' else 'BILL-' end)||
    case when length(v_seq::text)>6 then v_seq::text else lpad(v_seq::text,6,'0') end,
    v_run_date,v_run_date+v_rule.due_offset_days,v_source.memo,null,v_owner,
-   v_source.subtotal,v_source.tax_total,v_source.total)
+   v_source.subtotal,v_source.tax_total)
   returning id into v_doc;
   insert into public.financial_document_lines(organization_id,document_id,position,
    description,quantity,unit_price,tax_rate_bps,amount,tax_amount,
