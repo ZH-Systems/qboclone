@@ -1,0 +1,47 @@
+name: PostgreSQL ledger integration
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  database:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      PGHOST: localhost
+      PGPORT: 5432
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      PGDATABASE: postgres
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install PostgreSQL CLI
+        run: sudo apt-get update -qq && sudo apt-get install -y postgresql-client
+      - name: Bootstrap synthetic auth schema
+        run: psql -X -v ON_ERROR_STOP=1 -f supabase/tests/ci_auth_bootstrap.sql
+      - name: Apply ordered accounting migrations
+        shell: bash
+        run: |
+          set -euo pipefail
+          for file in supabase/migrations/*.sql; do
+            echo "Applying $file"
+            psql -X -v ON_ERROR_STOP=1 -f "$file"
+          done
+      - name: Run Milestone 2 SQL regression
+        run: psql -X -v ON_ERROR_STOP=1 -f supabase/tests/milestone2_regression.sql
+      - name: Run Milestone 3 SQL regression
+        run: psql -X -v ON_ERROR_STOP=1 -f supabase/tests/milestone3_regression.sql
