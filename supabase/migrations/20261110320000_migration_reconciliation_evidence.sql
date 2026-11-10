@@ -78,7 +78,7 @@ create function public.record_migration_reconciliation(
  p_org uuid,p_batch uuid,p_control text,p_source numeric,p_target numeric,
  p_source_report uuid,p_notes text
 ) returns void language plpgsql security definer set search_path=''
-as $
+as $reconcile$
 declare v_actual numeric(20,2);v_as_of date;v_expected_report text;
 begin
  if not exists(select 1 from public.organization_members
@@ -137,7 +137,7 @@ begin
  reviewed_by=excluded.reviewed_by,reviewed_at=now();
  perform private.write_audit(p_org,'migration.reconciliation_recorded','migration',p_batch,
   jsonb_build_object('control',p_control,'difference',p_target-p_source));
-end $$;
+end $reconcile$;
 
 create function public.accept_migration_financial_cutover(p_org uuid,p_batch uuid)
 returns void language plpgsql security definer set search_path=''
