@@ -146,6 +146,9 @@ begin
  if not found or p_date<v_doc.issue_date then raise exception 'Receipt needs posted supplier bill and valid date';end if;
  if exists(select 1 from public.inventory_receipts where organization_id=p_org and bill_line_id=p_line)
  then raise exception 'Bill line already received into inventory';end if;
+ if exists(select 1 from public.inventory_issues where organization_id=p_org
+  and product_id=p_product and issued_on>p_date)
+ then raise exception 'Backdated inventory receipt requires an accountant-led FIFO restatement';end if;
  -- Reclassify all bill line costs including nonrecoverable sales tax out of
  -- the expense account recognized by posting the bill.
  v_cost:=v_line.amount+v_line.tax_amount-v_line.recoverable_tax;
@@ -202,6 +205,9 @@ begin
  if not found or p_date<v_doc.issue_date then raise exception 'Issue requires posted invoice and valid date';end if;
  if exists(select 1 from public.inventory_issues where organization_id=p_org and invoice_line_id=p_line)
  then raise exception 'Invoice line has already been issued';end if;
+ if exists(select 1 from public.inventory_issues where organization_id=p_org and
+  product_id=p_product and issued_on>p_date) then
+  raise exception 'Backdated FIFO dispatch requires an accountant-led stock restatement';end if;
  select coalesce(sum(remaining_quantity),0) into v_available
  from public.inventory_receipts where organization_id=p_org and product_id=p_product
  and received_on<=p_date;
