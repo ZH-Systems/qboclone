@@ -102,6 +102,12 @@ Review [Milestone 8 implementation and launch blockers](docs/MILESTONE_8.md).
 
 **Source archival is not complete semantic accounting conversion.** Unsupported credits, payroll, inventory, historical journal treatment, attachments and special taxes require further mapping and verification. No production bank connections or commercial launch are authorized by the CI suite alone.
 
+## Milestone 9: Accounting feature completion
+
+Milestone 9 adds accountant-controlled FIFO inventory and COGS, supplier advances, CAD-based foreign-currency settlement, standard provincial sales-tax reference previews, and safe QuickBooks inventory SKU mapping without auto-posting stock valuation. See [Milestone 9 scope, deployment and limitations](docs/MILESTONE_9.md).
+
+**Not complete statutory parity:** multi-currency revaluation, full provincial tax calculation/filing, inventory returns and adjustment workflows, full historical stock valuation and payroll migration remain incomplete.
+
 ## Scope for next phase
 
 - Financial reporting over complete journals
