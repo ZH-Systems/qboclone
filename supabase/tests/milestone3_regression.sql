@@ -84,6 +84,24 @@ begin
  payment_id:=public.record_document_payment(org_a,invoice,113,v_date,'QA payment',
  'aaaa1111-1111-4111-8111-111111111111');
  select journal_entry_id into payment_journal from public.document_payments where id=payment_id;
+ failed:=false;
+ begin
+  perform public.record_document_payment(org_a,invoice,112,v_date,'QA payment',
+   'aaaa1111-1111-4111-8111-111111111111');
+ exception when others then failed:=true;end;
+ if not failed then raise exception 'FAIL conflicting payment idempotency replay';end if;
+ perform public.post_journal(org_a,v_date,'QA reclassification','QA-CLASS',
+  'aaaa3333-3333-4333-8333-333333333333',jsonb_build_array(
+  jsonb_build_object('account_id',expense,'debit',5,'credit',0),
+  jsonb_build_object('account_id',income,'debit',0,'credit',5)));
+ failed:=false;
+ begin
+  perform public.post_journal(org_a,v_date,'Changed reclassification','QA-CLASS',
+  'aaaa3333-3333-4333-8333-333333333333',jsonb_build_array(
+  jsonb_build_object('account_id',expense,'debit',5,'credit',0),
+  jsonb_build_object('account_id',income,'debit',0,'credit',5)));
+ exception when others then failed:=true;end;
+ if not failed then raise exception 'FAIL conflicting journal idempotency replay';end if;
  stmt:=public.create_bank_statement(org_a,bank,v_date,v_date,0,113);
  if public.import_bank_statement_rows(org_a,stmt,jsonb_build_array(
   jsonb_build_object('line_number',1,'date',v_date,'amount',113,
