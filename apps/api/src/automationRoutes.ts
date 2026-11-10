@@ -215,18 +215,31 @@ export async function registerAutomationRoutes(app:FastifyInstance,db:SupabaseCl
    if(req.headers['x-external-ocr-consent']!=='true')
     throw new Error('External OCR consent is required')
    const {data:receipt,error}=await db.from('receipt_documents')
-    .select('storage_path,mime_type').eq('organization_id',org).eq('id',route.id).maybeSingle()
+    .select('storage_path,mime_type,extraction_status,extraction_data').eq('organization_id',org).eq('id',route.id).maybeSingle()
    if(error||!receipt)throw new Error('Receipt not found')
    const {data:blob,error:downloadError}=await db.storage.from(bucket).download(receipt.storage_path)
    if(downloadError||!blob)throw new Error('Receipt could not be read from private storage')
+   if(receipt.extraction_status==='completed'){
+    return {receipt_id:route.id,...(receipt.extraction_data as Record<string,unknown>),cached:true}
+   }
    const bytes=Buffer.from(await blob.arrayBuffer())
-   const ocr=await visionExtract(config.googleVisionApiKey,receipt.mime_type as AllowedType,bytes)
-   const suggestions=suggestReceiptFields(ocr)
-   const result={text:ocr,suggestions,provider:'google_cloud_vision',
-    human_verified:false}
-   const {error:saveError}=await db.rpc('save_receipt_ocr_result',{
-    p_org:org,p_receipt:route.id,p_status:'completed',p_data:result})
-   if(saveError)throw saveError
+   const {error:reserveError}=await db.rpc('begin_receipt_ocr',{p_org:org,p_receipt:route.id})
+   if(reserveError)throw new Error(reserveError.message)
+   let result:Record<string,unknown>
+   try{
+    const ocr=await visionExtract(config.googleVisionApiKey,receipt.mime_type as AllowedType,bytes)
+    const suggestions=suggestReceiptFields(ocr)
+    result={text:ocr,suggestions,provider:'google_cloud_vision',human_verified:false}
+    const {error:saveError}=await db.rpc('save_receipt_ocr_result',{
+     p_org:org,p_receipt:route.id,p_status:'completed',p_data:result})
+    if(saveError)throw saveError
+   }catch(providerError){
+    const {error:failError}=await db.rpc('save_receipt_ocr_result',{
+     p_org:org,p_receipt:route.id,p_status:'failed',
+     p_data:{message:'OCR provider request failed. Retry after verifying the integration.'}})
+    if(failError)req.log.error({error:failError.message},'Could not release OCR reservation')
+    throw providerError
+   }
    return {receipt_id:route.id,...result}
   }catch(e){return routeFailure(reply,e)}
  })
