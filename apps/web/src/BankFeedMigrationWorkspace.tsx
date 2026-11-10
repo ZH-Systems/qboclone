@@ -245,6 +245,13 @@ export default function BankFeedMigrationWorkspace({organizationId,role,notify}:
   if(error)throw error
   notify('Standalone journal approved for explicit posting.')
  })
+ const importInventoryCatalog=()=>run(async()=>{
+  if(!supabase||!selectedBatch)throw new Error('Select a reviewed QuickBooks migration batch')
+  const {data,error}=await supabase.rpc('import_qbo_inventory_catalog',{
+   p_org:organizationId,p_batch:selectedBatch,p_limit:100})
+  if(error)throw error
+  notify(String(data?.products_imported||0)+' inventory SKUs imported. Stock valuation remains unposted until reviewed.')
+ })
  const postExtended=()=>run(async()=>{
   if(!supabase||!selectedBatch)throw new Error('Select a migration batch')
   if(!window.confirm('Post reviewed linked source credits and separately approved standalone journals?'))return
@@ -353,6 +360,7 @@ export default function BankFeedMigrationWorkspace({organizationId,role,notify}:
      <label>Standalone QBO JournalEntry source ID<input value={standaloneJournalId} onChange={e=>setStandaloneJournalId(e.target.value)}/></label>
      <button disabled={busy||!selectedBatch||!standaloneJournalId||!canManage} onClick={approveJournal}>Approve standalone journal</button>
      <button className="primary" disabled={busy||!selectedBatch||!canManage} onClick={postExtended}>Post reviewed credits & journals (up to 30)</button>
+     <button disabled={busy||!selectedBatch||!canManage} onClick={importInventoryCatalog}>Import reviewed inventory SKUs (up to 100)</button>
     </div>
    </div>
    <div className="card workspace-form"><h2>Accountant cutover reconciliation</h2>
