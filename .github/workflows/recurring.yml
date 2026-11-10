@@ -48,3 +48,18 @@ jobs:
             -H "X-Worker-Secret: $WORKER_SECRET" \
             -H "Content-Type: application/json" \
             --data '{}'
+
+      - name: Poll authorized bank feeds
+        if: ${{ vars.QBOCLONE_BANK_FEEDS_ENABLED == 'true' }}
+        env:
+          API_URL: ${{ secrets.QBOCLONE_API_URL }}
+          WORKER_SECRET: ${{ secrets.QBOCLONE_AUTOMATION_WORKER_SECRET }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail-with-body --silent --show-error --max-time 240 \
+            --retry 2 --retry-delay 10 \
+            -X POST "${API_URL%/}/bank-feeds/sync-due" \
+            -H "X-Worker-Secret: $WORKER_SECRET" \
+            -H "Content-Type: application/json" \
+            --data '{}'
