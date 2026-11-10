@@ -71,6 +71,8 @@ jobs:
         run: psql -X -v ON_ERROR_STOP=1 -f supabase/tests/milestone9_vendor_advances_regression.sql
       - name: Run Milestone 9 FX settlement regression
         run: psql -X -v ON_ERROR_STOP=1 -f supabase/tests/milestone9_fx_regression.sql
+      - name: Run Milestone 9 Canadian tax estimate regression
+        run: psql -X -v ON_ERROR_STOP=1 -f supabase/tests/milestone9_tax_regression.sql
       - name: Verify database backup and disaster recovery restore
         shell: bash
         run: |
