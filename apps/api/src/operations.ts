@@ -13,6 +13,14 @@ export const EXPORT_TABLES:ReadonlyArray<{name:string;columns:string}>=[
  {name:'financial_documents',columns:'id,organization_id,contact_id,document_type,document_number,issue_date,due_date,memo,status,source_document_id,subtotal,tax_total,total,journal_entry_id,posted_at,created_at'},
  {name:'financial_document_lines',columns:'id,organization_id,document_id,position,description,quantity,unit_price,tax_rate_bps,amount,tax_amount,account_id,tax_code_id,tax_classification,recoverable_tax'},
  {name:'document_payments',columns:'id,organization_id,document_id,amount,payment_date,reference,journal_entry_id,created_at'},
+ {name:'payment_refunds',columns:'id,organization_id,original_payment_id,refund_date,amount,reason,journal_entry_id,created_at'},
+ {name:'document_writeoffs',columns:'id,organization_id,document_id,entry_date,amount,reason,journal_entry_id,created_at'},
+ {name:'customer_deposits',columns:'id,organization_id,customer_id,received_on,amount,reference,journal_entry_id,created_at'},
+ {name:'deposit_applications',columns:'id,organization_id,deposit_id,invoice_id,applied_on,amount,journal_entry_id,created_at'},
+ {name:'deposit_refunds',columns:'id,organization_id,deposit_id,refunded_on,amount,reason,journal_entry_id,created_at'},
+ {name:'year_end_closures',columns:'id,organization_id,fiscal_period_id,closing_journal_id,retained_earnings_account_id,closed_at,closed_by'},
+ {name:'opening_balance_imports',columns:'organization_id,journal_entry_id,opening_date,created_by,created_at'},
+ {name:'accounting_adjustments',columns:'organization_id,journal_entry_id,category,explanation,created_at,created_by'},
  {name:'journal_entries',columns:'id,organization_id,entry_date,memo,reference,source_kind,created_at,created_by'},
  {name:'journal_lines',columns:'id,organization_id,journal_entry_id,account_id,debit,credit'},
  {name:'journal_reversals',columns:'organization_id,original_journal_id,reversing_journal_id,reason,reversed_at,reversed_by'},
@@ -22,7 +30,7 @@ export const EXPORT_TABLES:ReadonlyArray<{name:string;columns:string}>=[
  {name:'organization_usage_monthly',columns:'organization_id,month_start,metric,units'},
  {name:'audit_events',columns:'id,organization_id,actor_user_id,action,entity_type,entity_id,details,occurred_at'}
 ]
-const ORDER_COLUMNS:Record<string,string>={organization_members:'user_id',journal_reversals:'original_journal_id',organization_usage_monthly:'month_start'}
+const ORDER_COLUMNS:Record<string,string>={organization_members:'user_id',journal_reversals:'original_journal_id',organization_usage_monthly:'month_start',opening_balance_imports:'organization_id',accounting_adjustments:'journal_entry_id'}
 const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 export function requireOrganizationId(value:unknown):string{
  if(typeof value!=='string'||!uuid.test(value))throw new Error('Invalid organization identifier')
