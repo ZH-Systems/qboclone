@@ -17,7 +17,7 @@ set local role service_role;
 do $qa$
 declare v_org uuid:=current_setting('qa.m10_org')::uuid;
  v_session uuid:=current_setting('qa.m10_session')::uuid;
- v_claim boolean;v_claims integer;
+ v_claim boolean;v_claims integer;v_connection uuid;v_update uuid:=gen_random_uuid();
 begin
  insert into public.bank_feed_link_sessions(id,organization_id,user_id,expires_at)
  values(v_session,v_org,'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1'::uuid,now()+interval '10 minutes');
@@ -43,7 +43,25 @@ begin
  if v_claims<>0 then raise exception 'OAuth state replay was accepted';end if;
  select count(*) into v_claims from public.claim_qbo_oauth_state(repeat('b',64));
  if v_claims<>0 then raise exception 'Unknown OAuth state was accepted';end if;
- raise notice 'MILESTONE 10 ATOMIC PROVIDER CLAIM REGRESSION PASSED';
+ insert into public.bank_feed_connections(organization_id,provider,provider_item_id,encrypted_token,created_by)
+ values(v_org,'plaid','m10-test-provider-item','ciphertext-test',
+  'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1'::uuid) returning id into v_connection;
+ insert into public.bank_feed_update_sessions(id,organization_id,connection_id,user_id,expires_at)
+ values(v_update,v_org,v_connection,'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1'::uuid,
+ now()+interval '10 minutes');
+ v_claim:=public.claim_bank_update_session(v_update,v_org,
+  'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2'::uuid,v_connection);
+ if v_claim then raise exception 'Wrong user consumed Plaid consent renewal';end if;
+ v_claim:=public.claim_bank_update_session(v_update,v_org,
+  'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1'::uuid,gen_random_uuid());
+ if v_claim then raise exception 'Wrong bank item consumed consent renewal';end if;
+ v_claim:=public.claim_bank_update_session(v_update,v_org,
+  'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1'::uuid,v_connection);
+ if not v_claim then raise exception 'Valid Plaid consent renewal claim rejected';end if;
+ v_claim:=public.claim_bank_update_session(v_update,v_org,
+  'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1'::uuid,v_connection);
+ if v_claim then raise exception 'Plaid consent renewal replay succeeded';end if;
+  raise notice 'MILESTONE 10 ATOMIC PROVIDER CLAIM REGRESSION PASSED';
 end $qa$;
 reset role;
 set local role authenticated;
