@@ -9,6 +9,7 @@ import {createClient} from '@supabase/supabase-js'
 import {readConfig} from './config.js'
 import {bearerToken,requireOrganizationId,requireOrganizationRole,scopedSupabase,buildOrganizationExport} from './operations.js'
 import {sendInvitationEmail} from './email.js'
+import {registerAutomationRoutes} from './automationRoutes.js'
 import {requireOwner,resolvePrice,subscriptionOrganization,subscriptionPrice,paymentStatus,subscriptionPeriodEnd} from './billing.js'
 const config=readConfig()
 const stripe=new Stripe(config.stripeKey)
@@ -185,4 +186,5 @@ app.post('/stripe/webhook',{config:{rawBody:true}},async(req,reply)=>{
     return reply.code(500).send({error:'Webhook processing failed, Stripe should retry'})
   }
 })
+await registerAutomationRoutes(app,db,config)
 await app.listen({host:'0.0.0.0',port:config.port})
