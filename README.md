@@ -1,7 +1,55 @@
-# QBOClone
+# Ledger North (working name)
 
-Canada-first, multi-tenant accounting SaaS. This repository is under active development and is not production-ready accounting software.
+A Canada-first, multi-tenant accounting SaaS. This repository contains the first **functional foundation**, not a production-ready alternative to QuickBooks.
 
-Architecture: TypeScript monorepo, React/Vite frontend, Fastify API, PostgreSQL/Supabase persistence.
+## What is implemented
 
-Development begins in pull requests. Never use the initial scaffold for live books or financial filing without accounting and security validation.
+- React + TypeScript + Vite application with responsive dashboard, sign-up/login and multiple businesses per account.
+- Supabase Auth, tenant-visible organization and membership records, and row-level security.
+- Company bootstrap RPC creating a standard chart of accounts and a calendar-year fiscal period.
+- Chart of accounts viewer and account creation.
+- Double-entry journal posting RPC validating organization access, accounting period, active accounts, cent precision, balanced debits/credits and idempotency.
+- Recent journal browsing and a limited dashboard preview.
+- Unit tests for journal validation.
+
+**Do not use the application for actual accounting, financial reporting or tax filing yet.** See [architecture and limitations](docs/ARCHITECTURE.md).
+
+## Development setup
+
+1. Create a Supabase project intended for development only.
+2. Apply [the initial migration](supabase/migrations/20261110000000_ledger_foundation.sql) with Supabase CLI or the SQL editor.
+3. Enable email/password authentication under Supabase Auth.
+4. Copy `.env.example` to `apps/web/.env.local` and fill `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`.
+5. From the repository root, run:
+
+```bash
+npm install
+npm run dev
+```
+
+Run checks with:
+
+```bash
+npm run verify
+```
+
+The Vite development server exposes the web app locally. Only the Supabase **publishable/anon** key belongs in frontend environment variables. Never expose a service-role key.
+
+## Vercel deployment
+
+Import this repository as a Vercel project. Set Root Directory to `apps/web`, Framework Preset to Vite, Build Command to `npm run build`, and Output Directory to `dist`. Set the two `VITE_` environment variables in the Vercel dashboard. Deploy once the database migration has run.
+
+## Scope for next phase
+
+- Financial reporting over complete journals
+- Reversing journals, explicit period locking
+- Invoicing and accounts receivable
+- Vendor bills, expenses and accounts payable
+- Canadian GST/HST handling, independently verified
+- Audited tenant isolation and accounting integration tests
+- Stripe subscription management
+- Import/reconciliation and receipt processing
+
+## Developer note
+
+PostgreSQL database functions form the write boundary for ledger operations. Review every schema migration before deployment. Posted journals are not directly writable by regular authenticated users; elevated DB administration remains a separate trust boundary.
