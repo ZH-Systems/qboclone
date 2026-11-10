@@ -118,3 +118,7 @@ For production, set `DEPLOYMENT_ENV=production`, genuine `sk_live_` Stripe key, 
 Milestone 11 is independent Canadian CPA parallel-book acceptance and synthetic-to-pilot business onboarding. Milestone 12 is commercial rollout, support operations, pricing, incident ownership and audited go-live. Additional engineering gaps (full PST/QST posting, inventory returns, FX revaluation, payroll and incomplete historical QuickBooks classes) remain explicit scope decisions, not silently declared complete.
 
 **Production readiness is blocked until external acceptances are recorded.**
+
+## Vercel Services single-domain deployment
+
+The repository also supports a one-project Vercel Services deployment with `web` at `/` and `api` at `/api/*`, without internal bindings. The existing Docker API deployment remains available. See [Vercel Services instructions](VERCEL_SERVICES.md). The provider callback URLs, runtime environment, same-commit staging acceptance, and external release gates still apply. Do not assume that Vercel deployment completes live integration or CPA approval.
