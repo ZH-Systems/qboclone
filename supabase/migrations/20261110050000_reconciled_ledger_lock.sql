@@ -15,8 +15,9 @@ begin
  if p_entry_date is null or p_memo is null or char_length(trim(p_memo)) not between 3 and 500
  then raise exception 'Invalid journal header'; end if;
  if p_idempotency_key is null then raise exception 'Idempotency key required'; end if;
- if jsonb_typeof(p_lines) is distinct from 'array' or jsonb_array_length(p_lines) not between 2 and 100
- then raise exception 'Journal must contain 2 to 100 lines'; end if;
+ if jsonb_typeof(p_lines) is distinct from 'array' or jsonb_array_length(p_lines)<2 or
+   jsonb_array_length(p_lines)>case when p_source_kind='document' then 202 else 100 end
+ then raise exception 'Invalid number of journal lines for posting origin'; end if;
  perform 1 from public.organizations where id=p_organization_id for update;
  select id into v_id from public.journal_entries
  where organization_id=p_organization_id and source_kind=p_source_kind and idempotency_key=p_idempotency_key;
