@@ -22,7 +22,7 @@ create function private.post_accounting_journal_internal(
   p_lines jsonb
 ) returns uuid
 language plpgsql security definer set search_path = ''
-as $
+as $$
 declare v_id uuid; v_line jsonb; v_debit numeric; v_credit numeric;
         v_debits numeric(20,2) := 0; v_credits numeric(20,2) := 0;
         v_account uuid; v_count integer := 0; v_period uuid;
@@ -68,7 +68,7 @@ begin
     values(p_organization_id,v_id,(v_line->>'account_id')::uuid,(v_line->>'debit')::numeric,(v_line->>'credit')::numeric);
   end loop;
   return v_id;
-end $;
+end $$;
 
 revoke all on function private.post_accounting_journal_internal(text,uuid,date,text,text,uuid,jsonb)
   from public,anon,authenticated;
@@ -78,10 +78,10 @@ create or replace function public.post_journal(
   p_organization_id uuid,p_entry_date date,p_memo text,p_reference text,
   p_idempotency_key uuid,p_lines jsonb
 ) returns uuid language sql security definer set search_path=''
-as $
+as $$
   select private.post_accounting_journal_internal(
     'manual',p_organization_id,p_entry_date,p_memo,p_reference,p_idempotency_key,p_lines);
-$;
+$$;
 
 alter table public.organizations add column if not exists document_sequence bigint not null default 0;
 insert into public.accounts(organization_id,code,name,account_type,normal_balance)
@@ -264,7 +264,7 @@ begin
     where id=p_source_document_id and organization_id=p_organization_id and status='posted'
     for update;
     if not found or v_source.contact_id<>p_contact_id or
-       v_source.document_type<>case when p_type='credit_note' then 'invoice' else 'bill' end then
+       v_source.document_type<>(case when p_type='credit_note' then 'invoice' else 'bill' end) then
       raise exception 'Credit must reference a posted document for this contact';
     end if;
   elsif p_source_document_id is not null then raise exception 'Only credits may reference another document';
