@@ -30,3 +30,12 @@ export function subscriptionPrice(sub:Stripe.Subscription):string{
 export function paymentStatus(event:Stripe.Event,sub:Stripe.Subscription){
   return event.type==='customer.subscription.deleted'?'canceled':sub.status
 }
+
+/** Stripe API versions may surface period end on the subscription item rather than the subscription. */
+export function subscriptionPeriodEnd(sub:Stripe.Subscription):string|null{
+  const item=sub.items.data[0] as unknown as {current_period_end?:number}
+  const legacy=sub as unknown as {current_period_end?:number}
+  const seconds=item?.current_period_end??legacy.current_period_end
+  if(typeof seconds!=='number'||!Number.isFinite(seconds)||seconds<=0)return null
+  return new Date(seconds*1000).toISOString()
+}
