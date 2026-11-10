@@ -8,7 +8,7 @@ insert into auth.users(id,email,role,aud,created_at,updated_at) values
 set local role authenticated;
 do $test$
 declare
-  a uuid; b uuid; customer uuid; vendor uuid; inv uuid; bill uuid; credit uuid;
+  a uuid; b uuid; customer uuid; vendor uuid; inv uuid; bill uuid; credit_doc uuid;
   inv_journal uuid; payment1 uuid; payment2 uuid; ar uuid; rev uuid; cash uuid;
   expense uuid; sales_tax uuid; ap uuid; payment_total numeric; outstanding numeric;
   manual_journal uuid; reversing_journal uuid; v_locked uuid;
@@ -51,11 +51,11 @@ begin
   if payment1<>public.record_document_payment(
     a,inv,30,current_date,'qa-partial','33333333-3333-4333-8333-333333333333')
     then raise exception 'FAIL: payment idempotency'; end if;
-  credit:=public.create_financial_document(
+  credit_doc:=public.create_financial_document(
     a,customer,'credit_note',current_date,current_date,'QA credit',inv,
     jsonb_build_array(jsonb_build_object(
       'description','QA Return','quantity',1,'unit_price',20,'tax_rate_bps',0)));
-  perform public.post_financial_document(a,credit);
+  perform public.post_financial_document(a,credit_doc);
   outstanding:=public.document_outstanding(a,inv);
   if outstanding<>63 then raise exception 'FAIL: credit/payment outstanding expected 63, got %',outstanding; end if;
   payment2:=public.record_document_payment(
