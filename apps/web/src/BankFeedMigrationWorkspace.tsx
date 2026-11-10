@@ -73,6 +73,9 @@ export default function BankFeedMigrationWorkspace({organizationId,role,notify}:
  const [sourceAmount,setSourceAmount]=useState('')
  const [targetAmount,setTargetAmount]=useState('')
  const [controlNotes,setControlNotes]=useState('')
+ const [creditSourceId,setCreditSourceId]=useState('')
+ const [creditTargetSourceId,setCreditTargetSourceId]=useState('')
+ const [standaloneJournalId,setStandaloneJournalId]=useState('')
  const canManage=['owner','administrator','accountant'].includes(role)
  const load=useCallback(async()=>{
   if(!supabase||!organizationId)return
@@ -226,6 +229,30 @@ export default function BankFeedMigrationWorkspace({organizationId,role,notify}:
   if(error)throw error
   await load();notify('Financial cutover evidence accepted. Commercial launch controls remain separate.')
  })
+ const assignCredit=()=>run(async()=>{
+  if(!supabase||!selectedBatch)throw new Error('Select a migration batch')
+  const {error}=await supabase.rpc('assign_migration_credit_source',{
+   p_org:organizationId,p_batch:selectedBatch,p_credit_source:creditSourceId,
+   p_invoice_source:creditTargetSourceId})
+  if(error)throw error
+  notify('Credit-to-invoice relationship recorded. The credit remains unposted until reviewed.')
+ })
+ const approveJournal=()=>run(async()=>{
+  if(!supabase||!selectedBatch)throw new Error('Select a migration batch')
+  if(!window.confirm('Only approve truly standalone source journals. Importing journals already represented by invoices or bills double-counts finances.'))return
+  const {error}=await supabase.rpc('approve_migration_standalone_journal',{
+   p_org:organizationId,p_batch:selectedBatch,p_journal_source_id:standaloneJournalId})
+  if(error)throw error
+  notify('Standalone journal approved for explicit posting.')
+ })
+ const postExtended=()=>run(async()=>{
+  if(!supabase||!selectedBatch)throw new Error('Select a migration batch')
+  if(!window.confirm('Post reviewed linked source credits and separately approved standalone journals?'))return
+  const {data,error}=await supabase.rpc('apply_reviewed_migration_credits_and_journals',{
+   p_org:organizationId,p_batch:selectedBatch})
+  if(error)throw error
+  notify(Number(data?.posted||0)+' reviewed credits or journals posted.')
+ })
  const stageJson=()=>run(async()=>{
   if(!supabase||!selectedBatch||!sourceFile)throw new Error('Select a batch and JSON source file')
   if(sourceFile.size>10*1024*1024)throw new Error('JSON source bundle must be under 10 MiB')
@@ -313,6 +340,19 @@ export default function BankFeedMigrationWorkspace({organizationId,role,notify}:
      <button disabled={busy||!selectedBatch||!canManage} onClick={importSafe}>Import mapped safe records</button>
      <button disabled={busy||!selectedBatch||!canManage} onClick={postFinancials}>Post approved financials (up to 50)</button></div>
     {report&&<pre className="migration-review">{JSON.stringify(report,null,2)}</pre>}
+   </div>
+   <div className="card workspace-form"><h2>Map source credits and standalone journals</h2>
+    <p>QBO credits need an explicit matching posted invoice or bill. Standalone historical journals must be reviewed for double counting before approval.</p>
+    <div className="workspace-fields">
+     <label>Credit source ID<input value={creditSourceId} onChange={e=>setCreditSourceId(e.target.value)} placeholder="QBO CreditMemo ID"/></label>
+     <label>Invoice/bill source ID<input value={creditTargetSourceId} onChange={e=>setCreditTargetSourceId(e.target.value)} placeholder="Source Invoice ID"/></label>
+     <button disabled={busy||!selectedBatch||!creditSourceId||!creditTargetSourceId||!canManage} onClick={assignCredit}>Map source credit</button>
+    </div>
+    <div className="workspace-fields">
+     <label>Standalone QBO JournalEntry source ID<input value={standaloneJournalId} onChange={e=>setStandaloneJournalId(e.target.value)}/></label>
+     <button disabled={busy||!selectedBatch||!standaloneJournalId||!canManage} onClick={approveJournal}>Approve standalone journal</button>
+     <button className="primary" disabled={busy||!selectedBatch||!canManage} onClick={postExtended}>Post reviewed credits & journals (up to 30)</button>
+    </div>
    </div>
    <div className="card workspace-form"><h2>Accountant cutover reconciliation</h2>
     <p>Capture original QuickBooks reports and verify each reported balance against the live target ledger. The server recalculates target balances and rejects mismatches. Financial cutover requires six evidenced controls with differences at most $0.01, all open source invoices/bills and allocated payments posted, and a signed-off import batch.</p>
