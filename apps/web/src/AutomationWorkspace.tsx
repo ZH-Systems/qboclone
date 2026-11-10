@@ -13,11 +13,14 @@ const apiUrl=(import.meta.env.VITE_BILLING_API_URL||'').replace(/\/$/,'')
 const allRoles=['owner','administrator','accountant','bookkeeper']
 const money=(value:number)=>formatMoney(Math.round(Number(value)*100))
 export default function AutomationWorkspace({organizationId,role,notify}:Props){
- const [tab,setTab]=useState<'recurring'|'deliveries'|'receipts'|'imports'>('recurring')
+ const [tab,setTab]=useState<'recurring'|'deliveries'|'receipts'|'imports'|'reminders'>('recurring')
  const [documents,setDocuments]=useState<Doc[]>([])
  const [rules,setRules]=useState<Rule[]>([])
  const [receipts,setReceipts]=useState<Receipt[]>([])
  const [imports,setImports]=useState<ImportBatch[]>([])
+ const [remindersEnabled,setRemindersEnabled]=useState(false)
+ const [daysOverdue,setDaysOverdue]=useState('3')
+ const [cooldownDays,setCooldownDays]=useState('7')
  const [busy,setBusy]=useState(false)
  const [sourceId,setSourceId]=useState('')
  const [cadence,setCadence]=useState('monthly')
@@ -38,7 +41,7 @@ export default function AutomationWorkspace({organizationId,role,notify}:Props){
  const canWrite=allRoles.includes(role)
  const load=useCallback(async()=>{
   if(!supabase||!organizationId)return
-  const [d,r,rc,b]=await Promise.all([
+  const [d,r,rc,b,rem]=await Promise.all([
    supabase.from('financial_documents').select('id,document_number,document_type,status,total,contact_id,due_date')
     .eq('organization_id',organizationId).order('created_at',{ascending:false}).limit(500),
    supabase.from('recurring_document_rules').select('id,source_document_id,cadence,next_run_date,active,due_offset_days')
@@ -46,11 +49,15 @@ export default function AutomationWorkspace({organizationId,role,notify}:Props){
    supabase.from('receipt_documents').select('id,original_filename,mime_type,extraction_status,extraction_data,created_at')
     .eq('organization_id',organizationId).order('created_at',{ascending:false}).limit(100),
    supabase.from('import_review_batches').select('id,source_system,entity_kind,rows_previewed,rows_imported,created_at')
-    .eq('organization_id',organizationId).order('created_at',{ascending:false}).limit(30)
+    .eq('organization_id',organizationId).order('created_at',{ascending:false}).limit(30),
+   supabase.from('invoice_reminder_policies').select('enabled,days_overdue,cooldown_days')
+    .eq('organization_id',organizationId).maybeSingle()
   ])
-  for(const item of [d,r,rc,b])if(item.error)throw item.error
+  for(const item of [d,r,rc,b,rem])if(item.error)throw item.error
   setDocuments((d.data||[]) as Doc[]);setRules((r.data||[]) as Rule[])
   setReceipts((rc.data||[]) as Receipt[]);setImports((b.data||[]) as ImportBatch[])
+  setRemindersEnabled(Boolean(rem.data?.enabled))
+  setDaysOverdue(String(rem.data?.days_overdue||3));setCooldownDays(String(rem.data?.cooldown_days||7))
  },[organizationId])
  useEffect(()=>{void load().catch(e=>notify(e.message,true))},[load])
  const run=(task:()=>Promise<void>)=>{setBusy(true);void task().catch(e=>notify(e instanceof Error?e.message:String(e),true)).finally(()=>setBusy(false))}
@@ -69,6 +76,14 @@ export default function AutomationWorkspace({organizationId,role,notify}:Props){
   if(!response.ok){const error=await response.json().catch(()=>({error:'Request failed'})) as {error?:string}
    throw new Error(error.error||'Request failed')}
  }
+ const configureReminders=(e:FormEvent)=>{e.preventDefault();run(async()=>{
+  if(!supabase)throw new Error('Authentication unavailable')
+  const {error}=await supabase.rpc('configure_invoice_reminders',{
+   p_org:organizationId,p_enabled:remindersEnabled,
+   p_days_overdue:Number(daysOverdue),p_cooldown_days:Number(cooldownDays)})
+  if(error)throw error
+  await load();notify('Automatic overdue reminder policy saved.')
+ })}
  const createRule=(e:FormEvent)=>{e.preventDefault();run(async()=>{
   if(!supabase)return
   const {error}=await supabase.rpc('create_recurring_document_rule',{
@@ -160,7 +175,7 @@ export default function AutomationWorkspace({organizationId,role,notify}:Props){
  const sources=documents.filter(d=>['draft','posted'].includes(d.status)&&['invoice','bill'].includes(d.document_type))
  const chosen=receipts.find(r=>r.id===receiptId)
  return <section className="automation-workspace">
- <div className="advanced-tabs">{([['recurring','Recurring'],['deliveries','Invoice delivery'],['receipts','Receipts & OCR'],['imports','QuickBooks CSV imports']] as const).map(([id,label])=>
+ <div className="advanced-tabs">{([['recurring','Recurring'],['deliveries','Invoice delivery'],['reminders','Overdue reminders'],['receipts','Receipts & OCR'],['imports','QuickBooks CSV imports']] as const).map(([id,label])=>
   <button key={id} type="button" className={tab===id?'selected':''} onClick={()=>setTab(id)}>{label}</button>)}</div>
  {tab==='recurring'&&<>
  <form className="card workspace-form" onSubmit={createRule}><h2>Recurring invoice and bill drafts</h2>
@@ -182,6 +197,19 @@ export default function AutomationWorkspace({organizationId,role,notify}:Props){
  <button type="button" disabled={!invoiceId||busy||!canWrite||!apiUrl} onClick={()=>sendInvoice('invoice')}>Send invoice email</button>
  <button type="button" disabled={!invoiceId||busy||!canWrite||!apiUrl} onClick={()=>sendInvoice('payment_reminder')}>Send overdue reminder</button></div>
  </div>}
+ {tab==='reminders'&&<form className="card workspace-form" onSubmit={configureReminders}>
+  <h2>Opt-in overdue reminders</h2>
+  <p>Automatic reminders are disabled by default. Enabling this policy authorizes sending customer invoice emails from your configured business email provider. Only posted, overdue invoices with a positive outstanding balance are eligible. Each customer receives a reminder at most once per cooldown interval.</p>
+  <label className="ocr-consent"><input type="checkbox" checked={remindersEnabled}
+    disabled={!['owner','administrator'].includes(role)}
+    onChange={e=>setRemindersEnabled(e.target.checked)}/> Enable automatic overdue invoice reminders</label>
+  <div className="workspace-fields">
+   <label>Days after due date<input type="number" min="1" max="90" required value={daysOverdue} onChange={e=>setDaysOverdue(e.target.value)}/></label>
+   <label>Minimum days between reminders<input type="number" min="1" max="90" required value={cooldownDays} onChange={e=>setCooldownDays(e.target.value)}/></label>
+  </div>
+  <button className="primary" disabled={busy||!['owner','administrator'].includes(role)}>Save reminder policy</button>
+  <p className="advanced-note">Delivery requires a deployed worker and Resend configuration. Changing these settings does not send emails immediately.</p>
+ </form>}
  {tab==='receipts'&&<>
  <div className="card workspace-form"><h2>Private receipt upload</h2><p>Up to 8 MiB per PDF, PNG or JPEG. Files are kept in a private Supabase Storage bucket. Upload alone does not run OCR or post accounting entries.</p>
  <label>Receipt file<input type="file" accept=".pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg" onChange={e=>setReceiptFile(e.target.files?.[0]||null)}/></label>
