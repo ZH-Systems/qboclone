@@ -13,7 +13,7 @@ import {requireOwner,resolvePrice,subscriptionOrganization,subscriptionPrice,pay
 const config=readConfig()
 const stripe=new Stripe(config.stripeKey)
 const db=createClient(config.supabaseUrl,config.serviceRoleKey,{auth:{persistSession:false,autoRefreshToken:false}})
-const app=Fastify({logger:true,bodyLimit:1024*1024})
+const app=Fastify({logger:{redact:['req.headers.authorization','req.headers.stripe-signature','req.body']},bodyLimit:1024*1024})
 await app.register(cors,{origin:config.webOrigin,methods:['GET','POST'],allowedHeaders:['Authorization','Content-Type']})
 await app.register(helmet,{contentSecurityPolicy:false})
 await app.register(rateLimit,{global:false})
@@ -30,7 +30,9 @@ function isUuid(value:unknown):value is string {
 }
 function routeError(reply:any,e:unknown){
   const msg=e instanceof Error?e.message:'Unexpected server error'
-  if(/(required|Invalid|Unknown|not configured|owner role)/i.test(msg))return reply.code(400).send({error:msg})
+  if(/(Not authorized|owner role required)/i.test(msg))return reply.code(403).send({error:'Insufficient organization permissions'})
+  if(/not configured/i.test(msg))return reply.code(503).send({error:'The requested provider integration is not configured'})
+  if(/(required|Invalid|Unknown)/i.test(msg))return reply.code(400).send({error:msg})
   app.log.error(e)
   return reply.code(500).send({error:'Billing operation failed'})
 }
@@ -97,6 +99,8 @@ app.post('/organizations/export',{config:{rateLimit:{max:2,timeWindow:'1 hour'}}
   const org=requireOrganizationId(jsonInput(req.body).organizationId)
   await requireOrganizationRole(db,user,org,['owner','administrator','accountant'])
   const payload=await buildOrganizationExport(db,org,10000)
+  if(Buffer.byteLength(JSON.stringify(payload),'utf8')>20*1024*1024)
+   return reply.code(413).send({error:'Export exceeds 20 MiB; use archival export'})
   const scoped=scopedSupabase(config.supabaseUrl,config.serviceRoleKey,jwt)
   const {error}=await scoped.rpc('record_organization_export',{p_organization_id:org})
   if(error)throw new Error('Unable to record export audit event')
