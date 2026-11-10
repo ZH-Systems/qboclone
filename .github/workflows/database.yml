@@ -49,6 +49,8 @@ jobs:
         run: psql -X -v ON_ERROR_STOP=1 -f supabase/tests/milestone4_regression.sql
       - name: Run Milestone 5 SQL regression
         run: psql -X -v ON_ERROR_STOP=1 -f supabase/tests/milestone5_regression.sql
+      - name: Run Milestone 6 accounting regression
+        run: psql -X -v ON_ERROR_STOP=1 -f supabase/tests/milestone6_regression.sql
       - name: Verify database backup and disaster recovery restore
         shell: bash
         run: |
