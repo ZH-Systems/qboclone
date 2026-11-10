@@ -3,7 +3,9 @@
   "services": {
     "api": {
       "root": "apps/api",
-      "framework": "fastify"
+      "framework": "fastify",
+      "entrypoint": "src/server.ts",
+      "outputDirectory": "."
     },
     "web": {
       "root": "apps/web",
