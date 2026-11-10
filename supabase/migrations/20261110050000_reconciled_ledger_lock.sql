@@ -19,7 +19,7 @@ begin
  then raise exception 'Invalid journal header'; end if;
  if p_idempotency_key is null then raise exception 'Idempotency key required'; end if;
  if jsonb_typeof(p_lines) is distinct from 'array' or jsonb_array_length(p_lines)<2 or
-   jsonb_array_length(p_lines)>case when p_source_kind='document' then 202 else 100 end
+   jsonb_array_length(p_lines)>(case when p_source_kind='document' then 202 else 100 end)
  then raise exception 'Invalid number of journal lines for posting origin'; end if;
  v_fingerprint:=md5(p_source_kind||'|'||p_entry_date::text||'|'||trim(p_memo)||'|'||
   coalesce(nullif(trim(p_reference),''),'')||'|'||p_lines::text);
