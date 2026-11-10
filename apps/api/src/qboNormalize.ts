@@ -88,7 +88,18 @@ export function normalizeQbo(type:QboType,source:Record<string,unknown>):{
     credit:detail.PostingType==='Credit'?amount:0}
   }),post_as_standalone:false,qbo_raw_journal:true}}
  if(type==='Attachable')return {kind:'attachment',record:base}
- if(['Purchase','Deposit','SalesReceipt','RefundReceipt','Transfer','Estimate','PurchaseOrder','Item'].includes(type)){
+ if(type==='Item'){
+  const itemType=val(source.Type)
+  return {kind:'inventory_item',record:{...base,
+   sku:val(source.Sku||source.Name).slice(0,80),
+   name:val(source.Name).slice(0,180),
+   item_type:itemType,
+   quantity_on_hand:Number(source.QtyOnHand??0),
+   unit_cost:Number(source.PurchaseCost??0),
+   inventory_asset_source_id:id((source.AssetAccountRef as Record<string,unknown>|undefined)?.value)||null
+  }}
+ }
+ if(['Purchase','Deposit','SalesReceipt','RefundReceipt','Transfer','Estimate','PurchaseOrder'].includes(type)){
   const kinds:Record<string,MigrationKind>={Purchase:'purchase',Deposit:'deposit',SalesReceipt:'sales_receipt',
    RefundReceipt:'refund_receipt',Transfer:'transfer',Estimate:'estimate',PurchaseOrder:'purchase_order',
    Item:'inventory_item'}

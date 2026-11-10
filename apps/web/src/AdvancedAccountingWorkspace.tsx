@@ -1,6 +1,8 @@
 import {useCallback,useEffect,useState,type FormEvent} from 'react'
 import {supabase} from './lib/supabase'
 import AdditionalAccountingWorkflows,{type ExtraAccountingTab} from './AdditionalAccountingWorkflows'
+import InventoryWorkspace from './InventoryWorkspace'
+import AccountingCompletionWorkspace from './AccountingCompletionWorkspace'
 import {asDecimal,parseMoney,formatMoney,validateJournal,type JournalLine} from './lib/accounting'
 
 type Props={organizationId:string;role:string;notify:(message:string,isError?:boolean)=>void}
@@ -17,7 +19,7 @@ const today=()=>new Date().toLocaleDateString('sv-SE',{timeZone:'America/Toronto
 const amount=(value:number|string)=>formatMoney(Math.round(Number(value)*100))
 const provinces=['AB','BC','MB','NB','NL','NT','NS','NU','ON','PE','QC','SK','YT']
 const blank=():JournalLine[]=>[{account_id:'',debit:'',credit:'0'},{account_id:'',debit:'0',credit:''}]
-type Tab='closing'|'refunds'|'tax'|'reports'|'adjustments'|ExtraAccountingTab
+type Tab='closing'|'refunds'|'tax'|'reports'|'adjustments'|'inventory'|'vendors'|'foreign'|'provincial'|ExtraAccountingTab
 
 export default function AdvancedAccountingWorkspace({organizationId,role,notify}:Props){
  const [tab,setTab]=useState<Tab>('reports')
@@ -145,7 +147,7 @@ export default function AdvancedAccountingWorkspace({organizationId,role,notify}
  const totalItc=taxRows.reduce((s,r)=>s+Number(r.recoverable_itc),0)
  return <section className="advanced-accounting">
   <div className="advanced-tabs" role="group" aria-label="Advanced accounting sections">
-   {([['reports','Financial statements'],['closing','Year-end close'],['refunds','Payment refunds'],['adjustments','Adjustments'],['opening','Opening balances'],['deposits','Customer deposits'],['writeoffs','Bad debt'],['tax','Canadian tax rules']] as [Tab,string][]).map(([id,title])=>
+   {([['reports','Financial statements'],['closing','Year-end close'],['refunds','Payment refunds'],['adjustments','Adjustments'],['opening','Opening balances'],['deposits','Customer deposits'],['writeoffs','Bad debt'],['inventory','FIFO inventory'],['vendors','Supplier advances'],['foreign','Foreign currency'],['provincial','Provincial tax preview'],['tax','Canadian tax rules']] as [Tab,string][]).map(([id,title])=>
     <button type="button" key={id} className={tab===id?'selected':''} onClick={()=>setTab(id)}>{title}</button>)}
   </div>
   {tab==='reports'&&<>
@@ -191,6 +193,8 @@ export default function AdvancedAccountingWorkspace({organizationId,role,notify}
    <div className="workspace-toolbar"><button type="button" onClick={()=>setAdjustLines([...adjustLines,{account_id:'',debit:'0',credit:'0'}])}>Add line</button><button type="submit" className="primary" disabled={!canClose||busy}>Post adjustment</button></div>
   </form>}
   {(['opening','deposits','writeoffs'] as Tab[]).includes(tab)&&<AdditionalAccountingWorkflows organizationId={organizationId} role={role} mode={tab as ExtraAccountingTab} notify={notify}/>}
+  {tab==='inventory'&&<InventoryWorkspace organizationId={organizationId} role={role} notify={notify}/>}
+  {(['vendors','foreign','provincial'] as Tab[]).includes(tab)&&<AccountingCompletionWorkspace organizationId={organizationId} role={role} tab={tab as 'vendors'|'foreign'|'provincial'} notify={notify}/>}
   {tab==='tax'&&<form className="card workspace-form" onSubmit={addTax}><h2>Canadian GST/HST rate configuration</h2>
    <p className="advanced-note">Select the actual place of supply manually. The system looks up GST/HST rates by province and effective date; it does not determine whether a sale is taxable or exempt, assess special supplies, or calculate separate PST/QST.</p>
    <div className="workspace-fields"><label>Place-of-supply province<select value={province} onChange={e=>setProvince(e.target.value)}>{provinces.map(p=><option key={p} value={p}>{p}</option>)}</select></label><label>Supply date<input type="date" required value={taxDate} onChange={e=>setTaxDate(e.target.value)}/></label><label>Classification<select value={classification} onChange={e=>setClassification(e.target.value)}>{['taxable','zero_rated','exempt','out_of_scope'].map(c=><option key={c} value={c}>{c}</option>)}</select></label><label>Direction<select value={taxKind} onChange={e=>setTaxKind(e.target.value)}><option value="sale">Sale</option><option value="purchase">Purchase</option></select></label><label>Code<input required maxLength={24} value={taxCode} onChange={e=>setTaxCode(e.target.value)} placeholder="ON-HST-2026"/></label><label>Label<input required maxLength={120} value={taxLabel} onChange={e=>setTaxLabel(e.target.value)}/></label><label>Recoverable ITC basis points<input type="number" min="0" max="10000" required disabled={taxKind!=='purchase'} value={taxKind==='purchase'?taxRecoverability:'0'} onChange={e=>setTaxRecoverability(e.target.value)}/></label></div>

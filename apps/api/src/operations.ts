@@ -10,9 +10,19 @@ export const EXPORT_TABLES:ReadonlyArray<{name:string;columns:string}>=[
  {name:'accounts',columns:'id,organization_id,code,name,account_type,normal_balance,is_active,created_at'},
  {name:'fiscal_periods',columns:'id,organization_id,start_date,end_date,is_locked'},
  {name:'contacts',columns:'id,organization_id,contact_kind,display_name,email,created_at'},
- {name:'financial_documents',columns:'id,organization_id,contact_id,document_type,document_number,issue_date,due_date,memo,status,source_document_id,subtotal,tax_total,total,journal_entry_id,posted_at,created_at'},
+ {name:'financial_documents',columns:'id,organization_id,contact_id,document_type,document_number,issue_date,due_date,memo,status,source_document_id,subtotal,tax_total,total,document_currency,foreign_total,recognition_rate_cad,journal_entry_id,posted_at,created_at'},
  {name:'financial_document_lines',columns:'id,organization_id,document_id,position,description,quantity,unit_price,tax_rate_bps,amount,tax_amount,account_id,tax_code_id,tax_classification,recoverable_tax'},
  {name:'document_payments',columns:'id,organization_id,document_id,amount,payment_date,reference,journal_entry_id,created_at'},
+ {name:'foreign_document_payments',columns:'organization_id,payment_id,document_id,currency_code,foreign_amount,bank_cad_amount,cad_book_amount,realized_fx_gain,realized_fx_loss,created_at'},
+ {name:'vendor_advances',columns:'id,organization_id,vendor_id,paid_on,amount,reference,journal_entry_id,created_at'},
+ {name:'vendor_advance_applications',columns:'id,organization_id,advance_id,bill_id,amount,applied_on,journal_entry_id,created_at'},
+ {name:'vendor_advance_refunds',columns:'id,organization_id,advance_id,amount,refunded_on,reason,journal_entry_id,created_at'},
+ {name:'inventory_products',columns:'id,organization_id,sku,name,active,created_at'},
+ {name:'inventory_opening_batches',columns:'id,organization_id,opening_journal_id,effective_date,total_quantity,total_cost,payload_digest,created_at'},
+ {name:'migration_inventory_items',columns:'organization_id,batch_id,source_item_id,product_id,source_quantity,source_unit_cost,created_at'},
+ {name:'inventory_receipts',columns:'id,organization_id,product_id,bill_line_id,quantity,initial_cost,remaining_quantity,remaining_cost,received_on,journal_entry_id,created_at'},
+ {name:'inventory_issues',columns:'id,organization_id,product_id,invoice_line_id,quantity,total_cost,issued_on,journal_entry_id,created_at'},
+ {name:'inventory_issue_lots',columns:'organization_id,issue_id,receipt_id,quantity,cost'},
  {name:'payment_refunds',columns:'id,organization_id,original_payment_id,refund_date,amount,reason,journal_entry_id,created_at'},
  {name:'document_writeoffs',columns:'id,organization_id,document_id,entry_date,amount,reason,journal_entry_id,created_at'},
  {name:'customer_deposits',columns:'id,organization_id,customer_id,received_on,amount,reference,journal_entry_id,created_at'},
@@ -36,7 +46,7 @@ export const EXPORT_TABLES:ReadonlyArray<{name:string;columns:string}>=[
  {name:'organization_usage_monthly',columns:'organization_id,month_start,metric,units'},
  {name:'audit_events',columns:'id,organization_id,actor_user_id,action,entity_type,entity_id,details,occurred_at'}
 ]
-const ORDER_COLUMNS:Record<string,string>={organization_members:'user_id',journal_reversals:'original_journal_id',organization_usage_monthly:'month_start',opening_balance_imports:'organization_id',accounting_adjustments:'journal_entry_id',receipt_document_links:'receipt_id'}
+const ORDER_COLUMNS:Record<string,string>={organization_members:'user_id',journal_reversals:'original_journal_id',organization_usage_monthly:'month_start',opening_balance_imports:'organization_id',accounting_adjustments:'journal_entry_id',receipt_document_links:'receipt_id',foreign_document_payments:'payment_id',inventory_issue_lots:'issue_id',migration_inventory_items:'source_item_id'}
 const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 export function requireOrganizationId(value:unknown):string{
  if(typeof value!=='string'||!uuid.test(value))throw new Error('Invalid organization identifier')

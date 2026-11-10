@@ -181,7 +181,9 @@ export default function BankFeedMigrationWorkspace({organizationId,role,notify}:
   if(error)throw error
   const progressResult=await supabase.rpc('migration_batch_progress',{p_org:organizationId,p_batch:selectedBatch})
   if(progressResult.error)throw progressResult.error
-  setReport({...data,progress:progressResult.data} as Record<string,unknown>)
+  const inventoryResult=await supabase.rpc('inventory_migration_readiness',{p_org:organizationId,p_batch:selectedBatch})
+  if(inventoryResult.error)throw inventoryResult.error
+  setReport({...data,progress:progressResult.data,inventory_readiness:inventoryResult.data} as Record<string,unknown>)
  })
  const approve=()=>run(async()=>{
   if(!supabase||!selectedBatch)throw new Error('Select a migration batch')
@@ -244,6 +246,13 @@ export default function BankFeedMigrationWorkspace({organizationId,role,notify}:
    p_org:organizationId,p_batch:selectedBatch,p_journal_source_id:standaloneJournalId})
   if(error)throw error
   notify('Standalone journal approved for explicit posting.')
+ })
+ const importInventoryCatalog=()=>run(async()=>{
+  if(!supabase||!selectedBatch)throw new Error('Select a reviewed QuickBooks migration batch')
+  const {data,error}=await supabase.rpc('import_qbo_inventory_products',{
+   p_org:organizationId,p_batch:selectedBatch,p_limit:100})
+  if(error)throw error
+  notify(String(data?.mapped_products||0)+' inventory SKUs imported. Stock valuation remains unposted until reviewed.')
  })
  const postExtended=()=>run(async()=>{
   if(!supabase||!selectedBatch)throw new Error('Select a migration batch')
@@ -353,6 +362,7 @@ export default function BankFeedMigrationWorkspace({organizationId,role,notify}:
      <label>Standalone QBO JournalEntry source ID<input value={standaloneJournalId} onChange={e=>setStandaloneJournalId(e.target.value)}/></label>
      <button disabled={busy||!selectedBatch||!standaloneJournalId||!canManage} onClick={approveJournal}>Approve standalone journal</button>
      <button className="primary" disabled={busy||!selectedBatch||!canManage} onClick={postExtended}>Post reviewed credits & journals (up to 30)</button>
+     <button disabled={busy||!selectedBatch||!canManage} onClick={importInventoryCatalog}>Import reviewed inventory SKUs (up to 100)</button>
     </div>
    </div>
    <div className="card workspace-form"><h2>Accountant cutover reconciliation</h2>
