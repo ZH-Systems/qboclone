@@ -6,10 +6,15 @@ command -v pg_dump >/dev/null 2>&1 || { echo "pg_dump is required" >&2; exit 1; 
 command -v pg_restore >/dev/null 2>&1 || { echo "pg_restore is required" >&2; exit 1; }
 command -v sha256sum >/dev/null 2>&1 || { echo "sha256sum is required" >&2; exit 1; }
 BACKUP_DIR=${BACKUP_DIR:-"./backups"}
-mkdir -p "$BACKUP_DIR"
 umask 077
+mkdir -p "$BACKUP_DIR"
+chmod 700 "$BACKUP_DIR"
 timestamp=$(date -u +%Y%m%dT%H%M%SZ)
 target="$BACKUP_DIR/qboclone-$timestamp.dump"
+if [ -e "$target" ]; then
+  echo "Refusing to overwrite existing backup archive" >&2
+  exit 1
+fi
 partial="$target.partial"
 trap 'rm -f "$partial"' EXIT HUP INT TERM
 # libpq accepts a connection URI in PGDATABASE. Avoid logging credentials as arguments.
