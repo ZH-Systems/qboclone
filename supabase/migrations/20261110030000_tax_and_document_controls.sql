@@ -91,7 +91,7 @@ begin
   select * into v_source from public.financial_documents where organization_id=p_organization_id
    and id=p_source_document_id and status='posted' for update;
   if not found or v_source.contact_id<>p_contact_id or
-    v_source.document_type<>case when p_type='credit_note' then 'invoice' else 'bill' end
+    v_source.document_type<>(case when p_type='credit_note' then 'invoice' else 'bill' end)
   then raise exception 'Credit source does not match contact'; end if;
  elsif p_source_document_id is not null then raise exception 'Unexpected source document'; end if;
  update public.organizations set document_sequence=document_sequence+1
