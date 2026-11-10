@@ -11,5 +11,17 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: npm install
+      - run: npm ci --no-audit --no-fund
       - run: npm run verify
+
+  container:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build production API Docker image
+        run: docker build -f Dockerfile.api -t qboclone-api:${{ github.sha }} .
+      - name: Verify Docker image runs without root
+        run: |
+          test "$(docker image inspect qboclone-api:${{ github.sha }} --format '{{.Config.User}}')" = "node"
