@@ -66,10 +66,10 @@ export async function registerBankRoutes(app:FastifyInstance,db:SupabaseClient,c
     id:sessionId,organization_id:org,user_id:user,
     expires_at:new Date(Date.now()+15*60000).toISOString()})
    if(insertError)throw insertError
-   const {data}=await plaidRequest<{link_token:string}>(plaid,'/link/token/create',{
+   const linkResponse=await plaidRequest<{link_token:string}>(plaid,'/link/token/create',{
     client_name:'Ledger North',language:'en',country_codes:['CA'],products:['transactions'],
     user:{client_user_id:sessionId}})
-   return {sessionId,linkToken:data||null}
+   return {sessionId,linkToken:linkResponse.link_token}
   }catch(e){req.log.error({error:e instanceof Error?e.message:'bank token request'},'Bank link token request failed')
    return errorReply(reply,e)}
  })
