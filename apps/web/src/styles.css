@@ -31,3 +31,18 @@
 .period-form{display:flex;align-items:flex-end;gap:10px;flex-wrap:wrap;margin-top:20px}
 .period-form h3{flex-basis:100%;margin-bottom:0}
 .period-form label{display:flex;flex-direction:column;gap:6px;font-size:12px;font-weight:650;color:#556882}
+
+/* Milestone 3 tax configuration, banking and line account selection */
+.workspace-line{grid-template-columns:minmax(140px,2fr) minmax(65px,.65fr) minmax(90px,1fr) minmax(115px,1.2fr) minmax(80px,.8fr) minmax(135px,1.3fr)}
+.workspace-line label{min-width:0}
+.workspace-line input,.workspace-line select{width:100%;min-width:0}
+.accounting-workspace textarea{resize:vertical;width:100%;min-height:105px;border:1px solid #dce4ee;border-radius:8px;padding:11px;background:white;color:#1b2f47;font:inherit;font-size:12px}
+.accounting-workspace textarea:focus{outline:2px solid #9cc3fc;outline-offset:1px}
+.field-label{display:flex;flex-direction:column;gap:8px;font-size:12px;font-weight:650;color:#415674}
+.bank-summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:11px}
+.bank-summary span{display:flex;flex-direction:column;gap:7px;background:#f6f9fd;border-radius:9px;padding:15px;font-size:11px;color:#64748b}
+.bank-summary strong{font-size:17px;color:#1b2f47;font-variant-numeric:tabular-nums}
+.bank-summary+.workspace-toolbar{margin-top:8px}
+.row-actions select{min-width:180px;max-width:270px}
+@media(max-width:1250px){.workspace-line{grid-template-columns:repeat(3,minmax(0,1fr))}.bank-summary{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:760px){.workspace-line{grid-template-columns:repeat(2,minmax(0,1fr))}.bank-summary{grid-template-columns:1fr 1fr}.accounting-workspace .workspace-fields{grid-template-columns:1fr 1fr}.row-actions select{max-width:175px;min-width:120px}}
