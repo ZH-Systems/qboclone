@@ -9,7 +9,7 @@ type Receipt={id:string;original_filename:string;mime_type:string;extraction_sta
  extraction_data:{text?:string;suggestions?:Record<string,unknown>}|null;created_at:string}
 type ImportBatch={id:string;source_system:string;entity_kind:string;rows_previewed:number;rows_imported:number;created_at:string}
 const today=()=>new Date().toLocaleDateString('sv-SE',{timeZone:'America/Toronto'})
-const apiUrl=(import.meta.env.VITE_BILLING_API_URL||'').replace(/\/$/,'')
+const apiUrl=(import.meta.env.VITE_BILLING_API_URL||'/api').replace(/\/$/,'')
 const allRoles=['owner','administrator','accountant','bookkeeper']
 const money=(value:number)=>formatMoney(Math.round(Number(value)*100))
 export default function AutomationWorkspace({organizationId,role,notify}:Props){
