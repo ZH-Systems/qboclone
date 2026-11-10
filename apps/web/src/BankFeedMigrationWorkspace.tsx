@@ -17,7 +17,7 @@ type PlaidHandler={open:()=>void;destroy:()=>void}
 declare global{interface Window{Plaid?:{create:(options:{
  token:string;onSuccess:(publicToken:string)=>void;onExit:(error:unknown)=>void
  })=>PlaidHandler}}}
-const apiBase=(import.meta.env.VITE_BILLING_API_URL||'').replace(/\/$/,'')
+const apiBase=(import.meta.env.VITE_BILLING_API_URL||'/api').replace(/\/$/,'')
 const money=(v:number)=>formatMoney(Math.round(v*100))
 async function requireToken():Promise<string>{
  if(!supabase)throw new Error('Supabase unavailable')
