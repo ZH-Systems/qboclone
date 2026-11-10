@@ -6,6 +6,7 @@ create table public.recurring_document_rules(
  source_document_id uuid not null,
  cadence text not null check(cadence in ('weekly','monthly')),
  next_run_date date not null,
+ anchor_day integer not null check(anchor_day between 1 and 31),
  due_offset_days integer not null default 14 check(due_offset_days between 0 and 365),
  active boolean not null default true,
  created_by uuid not null references auth.users(id),
@@ -36,6 +37,14 @@ create policy recurring_runs_select on public.recurring_document_runs
 revoke all on public.recurring_document_rules,public.recurring_document_runs from public,anon,authenticated;
 grant select on public.recurring_document_rules,public.recurring_document_runs to authenticated;
 
+create function private.recurring_next_month(p_previous date,p_anchor_day integer)
+returns date language sql immutable set search_path=''
+as $
+ select (date_trunc('month',p_previous::timestamp)+interval '1 month'+
+ (least(p_anchor_day,extract(day from (date_trunc('month',p_previous::timestamp)+interval '2 months' - interval '1 day'))::integer)-1)*interval '1 day')::date
+$;
+revoke all on function private.recurring_next_month(date,integer) from public,anon,authenticated;
+
 create function public.create_recurring_document_rule(
  p_org uuid,p_source_document uuid,p_cadence text,p_first_date date,p_due_offset integer
 ) returns uuid language plpgsql security definer set search_path=''
@@ -53,8 +62,8 @@ begin
  v_source.document_type not in ('invoice','bill') then
  raise exception 'Recurring source must be an invoice or bill';end if;
  insert into public.recurring_document_rules(organization_id,source_document_id,cadence,
-  next_run_date,due_offset_days,created_by)
- values(p_org,p_source_document,p_cadence,p_first_date,p_due_offset,auth.uid())
+  next_run_date,anchor_day,due_offset_days,created_by)
+ values(p_org,p_source_document,p_cadence,p_first_date,extract(day from p_first_date)::integer,p_due_offset,auth.uid())
  returning id into v_id;
  perform private.write_audit(p_org,'automation.recurring_created','recurring_rule',v_id,
  jsonb_build_object('cadence',p_cadence,'first_date',p_first_date));
@@ -141,7 +150,7 @@ begin
   values(v_rule.organization_id,v_rule.id,v_run_date,v_doc);
   update public.recurring_document_rules set
     next_run_date=case when cadence='weekly' then v_run_date+7
-      else (v_run_date+interval '1 month')::date end,updated_at=now()
+      else private.recurring_next_month(v_run_date,v_rule.anchor_day) end,updated_at=now()
     where id=v_rule.id;
   perform private.write_audit(v_rule.organization_id,'automation.recurring_generated',
    'financial_document',v_doc,jsonb_build_object('rule_id',v_rule.id,'run_date',v_run_date));
