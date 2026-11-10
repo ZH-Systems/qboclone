@@ -13,6 +13,7 @@ import {sendInvitationEmail} from './email.js'
 import {registerAutomationRoutes} from './automationRoutes.js'
 import {registerBankRoutes} from './bankRoutes.js'
 import {registerQboRoutes} from './qboRoutes.js'
+import {registerPlatformAdminRoutes} from './platformAdminRoutes.js'
 import {requireOwner,resolvePrice,subscriptionOrganization,subscriptionPrice,paymentStatus,subscriptionPeriodEnd} from './billing.js'
 const config=readConfig()
 const stripe=new Stripe(config.stripeKey)
@@ -204,4 +205,5 @@ app.post('/stripe/webhook',{config:{rawBody:true}},async(req,reply)=>{
 await registerAutomationRoutes(app,db,config)
 await registerBankRoutes(app,db,config)
 await registerQboRoutes(app,db,config)
+await registerPlatformAdminRoutes(app,db,config)
 await app.listen({host:'0.0.0.0',port:config.port})
