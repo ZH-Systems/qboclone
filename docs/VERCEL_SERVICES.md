@@ -7,7 +7,7 @@ The root `vercel.json` defines two public services on one domain:
 | `web` | `apps/web` | Vite | `/*` |
 | `api` | `apps/api` | Fastify | `/api/*` |
 
-The API service explicitly sets `entrypoint: "src/server.mts"` and `outputDirectory: "."`. The `.mts` extension forces a `.mjs` runtime output, which Node recognizes as ESM even if Vercel flattens the bundle outside the original package boundary. The prior `.ts` entrypoint generated a `.js` file that Vercel invoked as CommonJS, resulting in `SyntaxError: Cannot use import statement outside a module`. Keep the explicit source entrypoint and test the live runtime.
+The API service explicitly sets `entrypoint: "src/server.ts"` and `outputDirectory: "."`. Its `apps/api/package.json` specifies `type: "commonjs"` so the NodeNext compiler emits CommonJS `dist/server.js`, matching the CommonJS loader used by Vercel Services when it flattens the function bundle outside the package directory. Route registration happens inside the asynchronous `startServer()` function to avoid top-level `await` in CommonJS. This addresses the observed `SyntaxError: Cannot use import statement outside a module`. Smoke-test actual Vercel functions, not just a successful build.
 
 **Bindings: none.** The React SPA calls the public same-origin API via `/api`; it cannot use a server-only Vercel service binding. All API routes require their existing authentication or signed webhook/worker authorization as applicable.
 
