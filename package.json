@@ -3,13 +3,20 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "workspaces": ["apps/*"],
+  "workspaces": [
+    "apps/*"
+  ],
   "scripts": {
     "dev": "npm run dev -w @qboclone/web",
     "build": "npm run build -w @qboclone/web",
     "typecheck": "npm run typecheck -w @qboclone/web",
     "test": "npm run test -w @qboclone/web",
-    "verify": "npm run typecheck && npm run test && npm run build"
+    "verify": "npm run typecheck -w @qboclone/web && npm run typecheck -w @qboclone/api && npm run test -w @qboclone/web && npm run test -w @qboclone/api && npm run build -w @qboclone/web && npm run build -w @qboclone/api",
+    "api:dev": "npm run dev -w @qboclone/api",
+    "api:build": "npm run build -w @qboclone/api",
+    "api:test": "npm run test -w @qboclone/api"
   },
-  "engines": { "node": ">=20" }
+  "engines": {
+    "node": ">=20"
+  }
 }
