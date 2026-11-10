@@ -24,4 +24,13 @@ describe('QuickBooks migration normalization',()=>{
  it('rejects unsupported dynamic type in source query',()=>{
   expect(()=>qboQuery('CompanyInfo' as never,1)).toThrow()
  })
+ it('archives QBO inventory quantities as unposted source metadata',()=>{
+  const item=normalizeQbo('Item',{Id:'item1',Name:'Widget',Sku:'W-100',
+   Type:'Inventory',QtyOnHand:12,PurchaseCost:3.25,AssetAccountRef:{value:'account-5'}})
+  expect(item?.kind).toBe('inventory_item')
+  expect(item?.record).toMatchObject({
+   sku:'W-100',name:'Widget',quantity_on_hand:12,unit_cost:3.25,
+   inventory_asset_source_id:'account-5'})
+ })
+
 })
