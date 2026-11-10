@@ -145,7 +145,8 @@ begin
  where j.organization_id=p_organization_id and j.id=p_journal_entry_id
  and l.account_id=s.bank_account_id
  group by j.entry_date;
- if v_journal_date is null or v_bank_delta<>tx.signed_amount
+ if v_journal_date is null or v_journal_date<s.start_date or v_journal_date>s.end_date
+   or v_bank_delta<>tx.signed_amount
  then raise exception 'Journal must contain an equal signed bank movement'; end if;
  if exists(
   select 1 from public.bank_transactions t
