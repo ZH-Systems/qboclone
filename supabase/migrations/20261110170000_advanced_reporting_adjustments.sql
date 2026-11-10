@@ -24,7 +24,7 @@ declare v_role text;v_journal uuid;
 begin
  select role into v_role from public.organization_members
  where organization_id=p_organization_id and user_id=auth.uid();
- if v_role not in ('owner','administrator','accountant') then
+ if v_role is null or v_role not in ('owner','administrator','accountant') then
   raise exception 'Only an owner, administrator or accountant can post adjusting entries';end if;
  if p_category not in ('accrual','deferral','reclassification','correction','other')
  or p_explanation is null or length(trim(p_explanation)) not between 10 and 500
