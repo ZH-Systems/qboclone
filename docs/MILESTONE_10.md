@@ -17,7 +17,7 @@
 
 ## Provider authorization hardening
 
-Migration `supabase/migrations/20261110400000_provider_claim_security.sql` adds atomic, one-time claims to the Plaid Link exchange and Intuit OAuth callback.
+Migrations `20261110400000_provider_claim_security.sql` and `20261110410000_bank_reauthorization.sql` add atomic, one-time claims to the Plaid Link exchange, Intuit OAuth callback and Plaid consent-renewal completion.
 
 - `claim_bank_link_session(session,organization,user)` succeeds exactly once for an unexpired session belonging to the authenticated user and organization. No client can invoke it directly.
 - `claim_qbo_oauth_state(sha256)` succeeds exactly once for an unexpired, 256-bit unpredictable OAuth state hash; it returns the trusted tenant/user association.
@@ -25,6 +25,16 @@ Migration `supabase/migrations/20261110400000_provider_claim_security.sql` adds 
 - Provider access/refresh tokens remain AES-256-GCM encrypted server-side; never log raw callback URLs, authorization codes, access tokens or exchanged credentials.
 
 **Residual risks:** Callback claims and provider token writes are not a distributed transaction. Failed persistence after provider exchange may orphan a connection, requiring operator cleanup/provider revocation. Intuit rotating refresh tokens also require per-connection concurrency coordination before high-traffic production rollout. These scenarios must be exercised during staging acceptance.
+
+## Plaid webhook authenticity and consent renewal
+
+Bank-authorization expiry is not an application exception users should work around manually. The Bank Feeds workspace now exposes **Renew bank consent** when an existing connection requires reauthorization. The backend creates a Plaid Link **update-mode** token using the existing encrypted access token. After successful Link completion, the backend consumes a one-time, tenant-bound renewal claim, checks the connected Item against Plaid /item/get, and only reactivates the existing bank feed when it is healthy. Plaid documents this flow as the recommended recovery for `ITEM_LOGIN_REQUIRED`. The Item access token remains unchanged. <https://plaid.com/docs/link/update-mode/>
+
+The server route `POST /bank-feeds/plaid-webhook` verifies the Plaid-Verification ES256 JWT against the provider's public key, enforces a five-minute timestamp window, and compares the SHA-256 of the **original raw body** before handling any event. Unverified events cannot alter bank connection status or queue a sync. Confirmed authorization-expiry events request reauthorization; recognized transaction update events queue the next sync. <https://plaid.com/docs/api/webhooks/webhook-verification/>
+
+**Provider setup:** Configure the webhook HTTPS URL in the Plaid developer dashboard, enable Plaid signature verification key retrieval, and run authorized sandbox webhook fixtures before production. Webhook delivery/replay is not certified until real events and consent renewal have been exercised. The existing scheduled polling mechanism remains a fallback.
+
+**Residual:** Provider-signed JWT validation alone is not an exactly-once delivery system. The webhook handler updates only deterministic connection state; it does not post financial journals or store sensitive webhook text. Per-institution pagination, duplicate Items, consent revocations and provider rate limits require live integration exercises.
 
 ## Build and rollout
 
