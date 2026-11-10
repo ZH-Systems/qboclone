@@ -149,37 +149,7 @@ begin
   v_name:=trim(coalesce(v_row.payload->>'name',v_raw->>'Name',''));
   v_sku:=trim(coalesce(nullif(v_row.payload->>'sku',''),nullif(v_raw->>'Sku',''),v_raw->>'Name',''));
   if length(v_name) not between 2 and 180 then raise exception 'QBO inventory item % missing name',v_row.source_id;end if;
-  if v_sku !~ '^[A-Za-z0-9][A-Za-z0-9._-]{0,79}
-create or replace function public.reverse_manual_journal(
- p_organization_id uuid,p_journal_id uuid,p_reversal_date date,p_reason text
-) returns uuid language plpgsql security definer set search_path=''
-as $$
-begin
- if not public.has_org_write(p_organization_id) then raise exception 'Not authorized';end if;
- perform 1 from public.organizations where id=p_organization_id for update;
- if exists(select 1 from public.opening_balance_imports where organization_id=p_organization_id and journal_entry_id=p_journal_id)
- or exists(select 1 from public.year_end_closures where organization_id=p_organization_id and closing_journal_id=p_journal_id)
- or exists(select 1 from public.payment_refunds where organization_id=p_organization_id and journal_entry_id=p_journal_id)
- or exists(select 1 from public.document_writeoffs where organization_id=p_organization_id and journal_entry_id=p_journal_id)
- or exists(select 1 from public.customer_deposits where organization_id=p_organization_id and journal_entry_id=p_journal_id)
- or exists(select 1 from public.deposit_applications where organization_id=p_organization_id and journal_entry_id=p_journal_id)
- or exists(select 1 from public.deposit_refunds where organization_id=p_organization_id and journal_entry_id=p_journal_id)
- or exists(select 1 from public.vendor_advances where organization_id=p_organization_id and journal_entry_id=p_journal_id)
- or exists(select 1 from public.vendor_advance_applications where organization_id=p_organization_id and journal_entry_id=p_journal_id)
- or exists(select 1 from public.vendor_advance_refunds where organization_id=p_organization_id and journal_entry_id=p_journal_id)
- or exists(select 1 from public.inventory_receipts where organization_id=p_organization_id and journal_entry_id=p_journal_id)
- or exists(select 1 from public.inventory_issues where organization_id=p_organization_id and journal_entry_id=p_journal_id)
- or exists(select 1 from public.foreign_document_payments fx
-   join public.document_payments p on p.organization_id=fx.organization_id and p.id=fx.payment_id
-   where fx.organization_id=p_organization_id and p.journal_entry_id=p_journal_id)
- then raise exception 'Source accounting journal cannot be manually reversed';end if;
- return public.reverse_manual_journal_legacy(p_organization_id,p_journal_id,p_reversal_date,p_reason);
-end $$;
-
-revoke all on function public.register_inventory_opening_lots(uuid,date,jsonb,uuid),
- public.import_qbo_inventory_products(uuid,uuid,integer) from public,anon;
-grant execute on function public.register_inventory_opening_lots(uuid,date,jsonb,uuid),
- public.import_qbo_inventory_products(uuid,uuid,integer) to authenticated;
+  if v_sku !~ '^[A-Za-z0-9][A-Za-z0-9._-]{0,79}$'
  then
    v_sku:='QBO-'||left(regexp_replace(v_row.source_id,'[^A-Za-z0-9]','','g'),60);
   end if;
@@ -232,5 +202,7 @@ begin
  return public.reverse_manual_journal_legacy(p_organization_id,p_journal_id,p_reversal_date,p_reason);
 end $$;
 
-revoke all on function public.register_inventory_opening_lots(uuid,date,jsonb,uuid) from public,anon;
-grant execute on function public.register_inventory_opening_lots(uuid,date,jsonb,uuid) to authenticated;
+revoke all on function public.register_inventory_opening_lots(uuid,date,jsonb,uuid),
+ public.import_qbo_inventory_products(uuid,uuid,integer) from public,anon;
+grant execute on function public.register_inventory_opening_lots(uuid,date,jsonb,uuid),
+ public.import_qbo_inventory_products(uuid,uuid,integer) to authenticated;
