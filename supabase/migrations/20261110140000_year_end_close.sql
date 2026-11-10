@@ -97,6 +97,7 @@ begin
           'already_closed',true) from public.year_end_closures where id=v_close_id);
  end if;
  if v_period.is_locked then raise exception 'Unlock this period before completing the final close'; end if;
+ if v_period.end_date>current_date then raise exception 'Cannot close a future financial period';end if;
  if exists(select 1 from public.fiscal_periods p where p.organization_id=p_organization_id
     and p.end_date<v_period.start_date and not exists(
       select 1 from public.year_end_closures c where c.organization_id=p_organization_id
@@ -120,6 +121,7 @@ begin
  loop
   if v_line.net_debit=0 then continue; end if;
   v_count:=v_count+1;
+  if v_count>99 then raise exception 'Year-end has more than 99 income accounts; use grouped close posting';end if;
   v_net:=v_net+v_line.net_debit;
   v_lines:=v_lines||jsonb_build_array(jsonb_build_object('account_id',v_line.account_id,
     'debit',greatest(0,-v_line.net_debit),'credit',greatest(0,v_line.net_debit)));
