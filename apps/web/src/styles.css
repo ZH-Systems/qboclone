@@ -22,3 +22,12 @@
 .payment-modal{max-width:475px}
 .payment-modal .workspace-create{gap:16px}
 @media(max-width:760px){.workspace-line{grid-template-columns:1fr 1fr}.workspace-line label:first-child{grid-column:1/-1}.workspace-reports{grid-template-columns:1fr}.workspace-form{padding:16px}.workspace-toolbar{align-items:flex-start;flex-direction:column}}
+
+.period-admin{margin-top:26px;padding-top:24px;border-top:1px solid #e5ecf3}
+.period-admin h2{margin-bottom:7px}
+.period-admin>p{font-size:12px}
+.period-admin .table-wrap{border:1px solid #e8edf3;border-radius:9px}
+.period-admin th,.period-admin td{padding:12px}
+.period-form{display:flex;align-items:flex-end;gap:10px;flex-wrap:wrap;margin-top:20px}
+.period-form h3{flex-basis:100%;margin-bottom:0}
+.period-form label{display:flex;flex-direction:column;gap:6px;font-size:12px;font-weight:650;color:#556882}
