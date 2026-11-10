@@ -137,7 +137,10 @@ export default function AutomationWorkspace({organizationId,role,notify}:Props){
  const handleCsvFile=(file:File|null)=>run(async()=>{
   if(!file)return
   if(file.size>1024*1024)throw new Error('Contact CSV must be under 1 MiB')
-  setCsvName(file.name);setCsvRaw(await file.text());setContactPreview([])
+  const raw=await file.text()
+  const records=parseCsvRecords(raw)
+  if(records.length<2)throw new Error('CSV must contain a header and at least one contact')
+  setCsvName(file.name);setCsvRaw(raw);setContactPreview([])
  })
  const previewCsv=()=>run(async()=>{
   const data=previewContacts(csvRaw,nameColumn,emailColumn)
