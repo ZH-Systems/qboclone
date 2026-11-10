@@ -139,7 +139,7 @@ begin
   v_amount:=round(v_qty*v_price,2);
   v_tax:=round(v_amount*v_rate/10000,2);
   v_recoverable:=case when v_kind='vendor' then
-   case when v_tax_id is null then v_tax
+   case when v_tax_id is null then 0
    else round(v_tax*v_tax_code.recoverable_bps/10000,2) end else 0 end;
   v_subtotal:=v_subtotal+v_amount; v_taxes:=v_taxes+v_tax;
   insert into public.financial_document_lines(
@@ -297,7 +297,7 @@ begin
   if v_rate not between 0 and 2500 then raise exception 'Invalid rate'; end if;
   v_amount:=round(v_qty*v_price,2);v_tax:=round(v_amount*v_rate/10000,2);
   v_recoverable:=case when v_kind='vendor' then
-    case when v_tax_id is null then v_tax else round(v_tax*v_tc.recoverable_bps/10000,2) end else 0 end;
+    case when v_tax_id is null then 0 else round(v_tax*v_tc.recoverable_bps/10000,2) end else 0 end;
   v_subtotal:=v_subtotal+v_amount;v_taxes:=v_taxes+v_tax;
   insert into public.financial_document_lines(
    organization_id,document_id,position,description,quantity,unit_price,tax_rate_bps,
