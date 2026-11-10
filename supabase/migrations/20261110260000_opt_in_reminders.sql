@@ -1,4 +1,6 @@
 -- Milestone 7: opt-in payment reminders with audited, idempotent worker claims.
+-- Automated delivery has no human sender, do not attribute it to the owner.
+alter table public.document_deliveries alter column sent_by drop not null;
 -- No reminders are sent until an owner/administrator enables the policy.
 create table public.invoice_reminder_policies(
  organization_id uuid primary key references public.organizations(id) on delete restrict,
@@ -118,7 +120,7 @@ create function public.finish_invoice_reminder(p_org uuid,p_invoice uuid,
 returns void language plpgsql security definer set search_path=''
 as $$
 declare v_state public.invoice_reminder_states%rowtype;v_policy public.invoice_reminder_policies%rowtype;
- v_contact text;v_owner uuid;v_delivery uuid;
+ v_contact text;v_delivery uuid;
 begin
  if p_succeeded is null or (p_provider_id is not null and length(p_provider_id)>255)
  then raise exception 'Invalid reminder result';end if;
@@ -131,9 +133,7 @@ begin
  select c.email into v_contact from public.financial_documents d
  join public.contacts c on c.organization_id=d.organization_id and c.id=d.contact_id
  where d.organization_id=p_org and d.id=p_invoice;
- select user_id into v_owner from public.organization_members where
-  organization_id=p_org and role='owner' limit 1;
- if v_owner is null or v_contact is null then raise exception 'Reminder owner or contact unavailable';end if;
+ if v_contact is null then raise exception 'Reminder contact unavailable';end if;
  update public.invoice_reminder_states set reserved_at=null,
   next_eligible_on=case when p_succeeded then current_date+v_policy.cooldown_days
    else current_date+1 end,
@@ -142,7 +142,7 @@ begin
  insert into public.document_deliveries(organization_id,document_id,recipient_email,
   delivery_kind,message_id,status,sent_by)
  values(p_org,p_invoice,v_contact,'payment_reminder',p_provider_id,
-  case when p_succeeded then 'sent' else 'failed' end,v_owner)
+  case when p_succeeded then 'sent' else 'failed' end,null)
  returning id into v_delivery;
  perform private.write_audit(p_org,'automation.reminder_attempt','delivery',v_delivery,
   jsonb_build_object('invoice_id',p_invoice,'success',p_succeeded));
