@@ -41,7 +41,7 @@ begin
  then raise exception 'Migration review did not identify all retained source records';end if;
  perform public.approve_migration_batch(v_org,v_batch);
  v_result:=public.apply_reviewed_migration(v_org,v_batch);
- if (v_result->>'imported_this_batch')::int<>3 then raise exception 'Safe import records incorrect';end if;
+ if (v_result->>'imported_this_batch')::int<>4 then raise exception 'Safe import records incorrect';end if;
  select target_id into v_invoice from public.migration_records where
   organization_id=v_org and batch_id=v_batch and record_kind='invoice';
  if not exists(select 1 from public.financial_documents where id=v_invoice and status='draft')
