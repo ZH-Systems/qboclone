@@ -75,6 +75,8 @@ jobs:
         run: psql -X -v ON_ERROR_STOP=1 -f supabase/tests/milestone9_tax_regression.sql
       - name: Run Milestone 9 inventory catalog regression
         run: psql -X -v ON_ERROR_STOP=1 -f supabase/tests/milestone9_catalog_regression.sql
+      - name: Run Milestone 9 QBO inventory opening migration regression
+        run: psql -X -v ON_ERROR_STOP=1 -f supabase/tests/milestone9_inventory_opening_regression.sql
       - name: Verify database backup and disaster recovery restore
         shell: bash
         run: |
