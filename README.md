@@ -85,6 +85,12 @@ See [Milestone 6 accounting design and test requirements](docs/MILESTONE_6.md).
 
 **Not a certified tax solution:** PST/QST, full place-of-supply rules, GST/HST filing, qualified ITC determinations, and formal financial statement certification require additional implementation and professional review.
 
+## Milestone 7: Automation and integrations
+
+The development branch adds recurring invoice/bill draft generation, opt-in overdue reminders, downloadable invoice PDFs, email delivery, private receipt storage and explicit OCR review, reviewed contact CSV import, bank CSV field mapping, and suggested journal matches. See [Milestone 7 documentation](docs/MILESTONE_7.md) for required integration setup and compliance limitations.
+
+**Provider setup is external:** Resend, Google Cloud Vision, private Supabase Storage and GitHub Actions worker secrets must be configured. No live bank-feed provider is connected, and no production data was processed.
+
 ## Scope for next phase
 
 - Financial reporting over complete journals
