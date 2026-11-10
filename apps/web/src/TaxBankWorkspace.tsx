@@ -123,6 +123,12 @@ export default function TaxBankWorkspace({organizationId,mode,notify}:Props){
     if(error)throw error
     await refreshRows();notify('Transaction unmatched.')
   })
+  const resetImport=()=>void run(async()=>{
+    if(!supabase||!current)return
+    const {data,error}=await supabase.rpc('reset_open_bank_statement',{p_organization_id:organizationId,p_statement_id:current.id})
+    if(error)throw error
+    await refreshRows();notify(`${data} staged bank rows cleared. No journal entries were changed.`)
+  })
   const reconcile=()=>void run(async()=>{
     if(!supabase||!current)return
     const {error}=await supabase.rpc('reconcile_bank_statement',{
@@ -146,7 +152,7 @@ export default function TaxBankWorkspace({organizationId,mode,notify}:Props){
       <div className="card workspace-form"><h2>Bank statement workspace</h2><label className="field-label">Select statement<select value={activeStatement} onChange={e=>setActiveStatement(e.target.value)}><option value="">Choose a statement</option>{statements.map(s=><option key={s.id} value={s.id}>{s.start_date} to {s.end_date} · {accounts.find(a=>a.id===s.bank_account_id)?.name||'Account'} · {s.status}</option>)}</select></label>
       {current&&<><div className="bank-summary"><span>Opening <strong>{formatMoney(Math.round(Number(current.opening_balance)*100))}</strong></span><span>Imported change <strong>{formatMoney(importedSum)}</strong></span><span>Expected closing <strong>{formatMoney(Math.round(Number(current.closing_balance)*100))}</strong></span><span>Unmatched <strong>{activeRows.length}</strong></span></div>
       {current.status==='open'&&<><p className="workspace-disclaimer">CSV format: date,description,amount,reference. Dates must be YYYY-MM-DD; positive amounts are deposits, negative amounts are withdrawals. Preserve row order when reimporting the same file. Imports are capped at 500 rows per batch.</p>
-      <label className="field-label">Statement CSV<textarea rows={5} value={csv} onChange={e=>setCsv(e.target.value)} placeholder={'date,description,amount,reference\n2026-11-01,Client payment,113.00,INV-001'}/></label><div className="workspace-toolbar"><button className="primary" disabled={busy||!csv.trim()} onClick={importCsv}>Import CSV rows</button><button className="primary" disabled={busy||rows.length===0||activeRows.length>0} onClick={reconcile}>Reconcile statement</button></div></>}
+      <label className="field-label">Statement CSV<textarea rows={5} value={csv} onChange={e=>setCsv(e.target.value)} placeholder={'date,description,amount,reference\n2026-11-01,Client payment,113.00,INV-001'}/></label><div className="workspace-toolbar"><button className="primary" disabled={busy||!csv.trim()} onClick={importCsv}>Import CSV rows</button><button type="button" disabled={busy||rows.length===0} onClick={resetImport}>Reset imported rows</button><button className="primary" disabled={busy||rows.length===0||activeRows.length>0} onClick={reconcile}>Reconcile statement</button></div></>}
       <div className="table-wrap"><table><thead><tr><th>#</th><th>Date</th><th>Description</th><th>Bank change</th><th>Match</th></tr></thead><tbody>{rows.map(r=><tr key={r.id}><td>{r.line_number}</td><td>{r.transaction_date}</td><td>{r.description}</td><td>{formatMoney(Math.round(Number(r.signed_amount)*100))}</td><td>{r.matched_journal_entry_id?<><span className="status">Matched</span>{current.status==='open'&&<button className="link-button" disabled={busy} onClick={()=>unmatch(r)}>Unmatch</button>}</>:current.status==='open'?<div className="row-actions"><select value={selectedMatches[r.id]||''} onChange={e=>setSelectedMatches({...selectedMatches,[r.id]:e.target.value})}><option value="">Choose journal</option>{candidates(r).map(j=><option key={j.id} value={j.id}>{j.entry_date} · {j.memo.slice(0,42)}</option>)}</select><button disabled={busy||!selectedMatches[r.id]} onClick={()=>match(r)}>Match</button></div>:'Unmatched'}</td></tr>)}{rows.length===0&&<tr><td colSpan={5}><div className="empty">No imported transactions.</div></td></tr>}</tbody></table></div></>}</div>
     </>}
   </section>
