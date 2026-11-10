@@ -85,3 +85,10 @@
 .advanced-journal-row{display:grid;grid-template-columns:2fr 1fr 1fr;gap:12px}
 .advanced-accounting .workspace-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px}
 @media(max-width:750px){.advanced-tabs{display:grid;grid-template-columns:1fr 1fr}.advanced-accounting .workspace-fields{grid-template-columns:1fr}.advanced-journal-row{grid-template-columns:1fr 1fr}.advanced-journal-row label:first-child{grid-column:1/-1}}
+
+.advanced-extras{display:grid;gap:20px}
+.advanced-inline-form{padding:20px 0;border-top:1px solid #e1e9f2;display:grid;gap:12px}
+.advanced-inline-form h3{font-size:14px;color:#243f65;margin:0}
+.advanced-extras>.workspace-form{display:grid;gap:20px}
+.advanced-extras .workspace-toolbar{display:flex;align-items:center;justify-content:space-between}
+@media(max-width:800px){.advanced-inline-form .workspace-fields{grid-template-columns:1fr}}
