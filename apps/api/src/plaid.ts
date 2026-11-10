@@ -63,3 +63,44 @@ export function classifySyncError(error:unknown):string{
 export function clientRequestKey(org:string,providerAccountId:string):string{
  return createHash('sha256').update(org+':'+providerAccountId).digest('hex')
 }
+
+export type PlaidWebhookJwk={kty:string;crv:string;alg:string;kid:string;use:string;x:string;y:string;
+ created_at?:number;expired_at?:number}
+function decodeJwtObject(segment:string):Record<string,unknown>{
+ const value:unknown=JSON.parse(Buffer.from(segment,'base64url').toString('utf8'))
+ if(!value||typeof value!=='object'||Array.isArray(value))
+  throw new Error('Invalid Plaid webhook JWT content')
+ return value as Record<string,unknown>
+}
+export function plaidWebhookKeyId(signatureJwt:string):string{
+ const parts=signatureJwt.split('.')
+ if(parts.length!==3)throw new Error('Missing Plaid webhook JWT')
+ const header=decodeJwtObject(parts[0])
+ if(header.alg!=='ES256'||typeof header.kid!=='string'||header.kid.length>200||
+  header.kid.length<8)throw new Error('Invalid Plaid webhook signature algorithm or key')
+ return header.kid
+}
+export function verifyPlaidWebhook(raw:Buffer,jwt:string,jwk:PlaidWebhookJwk,nowMs=Date.now()):boolean{
+ if(!Buffer.isBuffer(raw)||raw.length>50000||raw.length===0)return false
+ try{
+  const parts=jwt.split('.')
+  if(parts.length!==3)return false
+  const kid=plaidWebhookKeyId(jwt)
+  if(jwk.alg!=='ES256'||jwk.kty!=='EC'||jwk.crv!=='P-256'||jwk.use!=='sig'||
+   jwk.kid!==kid||typeof jwk.x!=='string'||typeof jwk.y!=='string')return false
+  const claims=decodeJwtObject(parts[1])
+  const iat=claims.iat
+  if(typeof iat!=='number'||!Number.isInteger(iat)||
+   Math.abs(nowMs-iat*1000)>300000)return false
+  const rawDigest=createHash('sha256').update(raw).digest()
+  if(typeof claims.request_body_sha256!=='string'||!/^[a-f0-9]{64}$/.test(claims.request_body_sha256))
+   return false
+  const advertisedDigest=Buffer.from(claims.request_body_sha256,'hex')
+  if(!timingSafeEqual(rawDigest,advertisedDigest))return false
+  const publicKey=createPublicKey({key:{kty:'EC',crv:'P-256',x:jwk.x,y:jwk.y},format:'jwk'})
+  const signature=Buffer.from(parts[2],'base64url')
+  if(signature.length!==64)return false
+  return cryptoVerify('sha256',Buffer.from(parts[0]+'.'+parts[1]),
+   {key:publicKey,dsaEncoding:'ieee-p1363'},signature)
+ }catch{return false}
+}
