@@ -1,0 +1,55 @@
+name: Milestone 8 production readiness gate
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  release-check:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify build and tests
+        run: |
+          npm install
+          npm run verify
+      - name: Check production dependencies for high-severity advisories
+        run: npm audit --omit=dev --audit-level=high
+      - name: Enforce explicit launch acceptances
+        env:
+          API_URL: ${{ secrets.QBOCLONE_PROD_API_URL }}
+          CPA_SIGNOFF: ${{ vars.QBOCLONE_CPA_SIGNOFF }}
+          PRIVACY_APPROVED: ${{ vars.QBOCLONE_PRIVACY_REVIEW_APPROVED }}
+          SECURITY_APPROVED: ${{ vars.QBOCLONE_SECURITY_REVIEW_APPROVED }}
+          RESTORE_VERIFIED: ${{ vars.QBOCLONE_RESTORE_DRILL_VERIFIED }}
+          TENANT_ISOLATION: ${{ vars.QBOCLONE_TENANT_ISOLATION_VERIFIED }}
+          STRIPE_ACCEPTED: ${{ vars.QBOCLONE_STRIPE_TEST_ACCEPTED }}
+          PLAID_ACCEPTED: ${{ vars.QBOCLONE_PLAID_BANK_TEST_ACCEPTED }}
+          QBO_ACCEPTED: ${{ vars.QBOCLONE_QBO_MIGRATION_ACCEPTED }}
+          EMAIL_ACCEPTED: ${{ vars.QBOCLONE_EMAIL_DELIVERY_ACCEPTED }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "$API_URL" || "$API_URL" != https://* ]]; then
+            echo "BLOCKED: production HTTPS API URL missing"
+            exit 1
+          fi
+          for variable in CPA_SIGNOFF PRIVACY_APPROVED SECURITY_APPROVED RESTORE_VERIFIED \
+                          TENANT_ISOLATION STRIPE_ACCEPTED PLAID_ACCEPTED QBO_ACCEPTED EMAIL_ACCEPTED; do
+            if [[ "${!variable}" != "true" ]]; then
+              echo "BLOCKED: $variable has no recorded acceptance"
+              exit 1
+            fi
+          done
+          echo "Required launch attestations present."
+          curl --fail-with-body --silent --show-error --max-time 15 "${API_URL%/}/health" >/dev/null
+          curl --fail-with-body --silent --show-error --max-time 15 "${API_URL%/}/ready" >/dev/null
+          echo "API liveness and readiness passed."
+      - name: Report acceptance gate only, do not deploy automatically
+        run: |
+          echo "Readiness evidence accepted. Deployments require separate protected-environment approval."
