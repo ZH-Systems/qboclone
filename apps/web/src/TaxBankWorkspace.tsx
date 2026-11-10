@@ -4,8 +4,8 @@ import {formatMoney} from './lib/accounting'
 import {parseBankCsv,parseSignedMoney} from './lib/bankCsv'
 
 type Props={organizationId:string;mode:'tax'|'banking';notify:(message:string,isError?:boolean)=>void}
-type Account={id:string;code:string;name:string;account_type:string}
-type TaxCode={id:string;code:string;label:string;transaction_kind:string;classification:string;rate_bps:number;recoverable_bps:number}
+type Account={id:string;code:string;name:string;account_type:string;is_bank_account:boolean}
+type TaxCode={id:string;code:string;label:string;transaction_kind:string;classification:string;rate_bps:number;recoverable_bps:number;effective_from:string;effective_until:string|null}
 type Statement={id:string;bank_account_id:string;start_date:string;end_date:string;opening_balance:number;closing_balance:number;status:'open'|'reconciled'}
 type BankRow={id:string;statement_id:string;line_number:number;transaction_date:string;description:string;reference:string|null;signed_amount:number;matched_journal_entry_id:string|null}
 type Journal={id:string;entry_date:string;memo:string;reference:string|null;journal_lines:{account_id:string;debit:number;credit:number}[]}
@@ -24,6 +24,9 @@ export default function TaxBankWorkspace({organizationId,mode,notify}:Props){
   const [classification,setClassification]=useState('taxable')
   const [rate,setRate]=useState('1300')
   const [recoverable,setRecoverable]=useState('0')
+  const [effectiveFrom,setEffectiveFrom]=useState('2026-01-01')
+  const [effectiveUntil,setEffectiveUntil]=useState('')
+  const [bankFlagAccount,setBankFlagAccount]=useState('')
   const [accountId,setAccountId]=useState('')
   const [start,setStart]=useState(today().slice(0,8)+'01')
   const [end,setEnd]=useState(today())
@@ -36,8 +39,8 @@ export default function TaxBankWorkspace({organizationId,mode,notify}:Props){
   const refresh=useCallback(async()=>{
     if(!supabase||!organizationId)return
     const [a,t,s,j]=await Promise.all([
-      supabase.from('accounts').select('id,code,name,account_type').eq('organization_id',organizationId).order('code'),
-      supabase.from('tax_codes').select('id,code,label,transaction_kind,classification,rate_bps,recoverable_bps').eq('organization_id',organizationId).order('code'),
+      supabase.from('accounts').select('id,code,name,account_type,is_bank_account').eq('organization_id',organizationId).order('code'),
+      supabase.from('tax_codes').select('id,code,label,transaction_kind,classification,rate_bps,recoverable_bps,effective_from,effective_until').eq('organization_id',organizationId).order('code'),
       supabase.from('bank_statements').select('id,bank_account_id,start_date,end_date,opening_balance,closing_balance,status').eq('organization_id',organizationId).order('end_date',{ascending:false}),
       supabase.from('journal_entries').select('id,entry_date,memo,reference,journal_lines(account_id,debit,credit)').eq('organization_id',organizationId).order('entry_date',{ascending:false}).limit(500)
     ])
@@ -61,14 +64,21 @@ export default function TaxBankWorkspace({organizationId,mode,notify}:Props){
   }
   const createTax=(e:FormEvent)=>{e.preventDefault();void run(async()=>{
     if(!supabase)return
-    const {error}=await supabase.rpc('create_tax_code',{
+    const {error}=await supabase.rpc('create_tax_code_with_dates',{
       p_organization_id:organizationId,p_code:code.trim(),p_label:label.trim(),p_kind:kind,
       p_classification:classification,p_rate_bps:Number(classification==='taxable'?rate:'0'),
-      p_recoverable_bps:kind==='purchase'?Number(recoverable):0
+      p_recoverable_bps:kind==='purchase'?Number(recoverable):0,
+      p_effective_from:effectiveFrom,p_effective_until:effectiveUntil||null
     })
     if(error)throw error
     setCode('');setLabel('');await refresh();notify('Tax classification created.')
   })}
+  const designateBank=()=>void run(async()=>{
+    if(!supabase||!bankFlagAccount)throw new Error('Choose an asset account.')
+    const {error}=await supabase.rpc('set_bank_account_flag',{p_organization_id:organizationId,p_account_id:bankFlagAccount,p_is_bank:true})
+    if(error)throw error
+    await refresh();notify('Account designated as a bank account.')
+  })
   const createStatement=(e:FormEvent)=>{e.preventDefault();void run(async()=>{
     if(!supabase)return
     const {data,error}=await supabase.rpc('create_bank_statement',{
@@ -125,13 +135,14 @@ export default function TaxBankWorkspace({organizationId,mode,notify}:Props){
   return <section className="accounting-workspace">
     {mode==='tax'&&<>
       <div className="card"><div className="card-head"><div><h2>Configured tax classifications</h2><p>Rates and recoverability are organization-defined, not validated Canadian tax guidance.</p></div></div>
-      <div className="table-wrap"><table><thead><tr><th>Code</th><th>Description</th><th>Applies to</th><th>Class</th><th>Rate</th><th>Recoverable</th></tr></thead><tbody>{taxCodes.map(t=><tr key={t.id}><td className="strong">{t.code}</td><td>{t.label}</td><td className="capitalize">{t.transaction_kind}</td><td>{t.classification}</td><td>{(t.rate_bps/100).toFixed(2)}%</td><td>{(t.recoverable_bps/100).toFixed(2)}%</td></tr>)}{taxCodes.length===0&&<tr><td colSpan={6}><div className="empty">No tax codes defined.</div></td></tr>}</tbody></table></div></div>
+      <div className="table-wrap"><table><thead><tr><th>Code</th><th>Description</th><th>Applies to</th><th>Class</th><th>Rate</th><th>Recoverable</th><th>Effective period</th></tr></thead><tbody>{taxCodes.map(t=><tr key={t.id}><td className="strong">{t.code}</td><td>{t.label}</td><td className="capitalize">{t.transaction_kind}</td><td>{t.classification}</td><td>{(t.rate_bps/100).toFixed(2)}%</td><td>{(t.recoverable_bps/100).toFixed(2)}%</td><td>{t.effective_from} to {t.effective_until||'open'}</td></tr>)}{taxCodes.length===0&&<tr><td colSpan={7}><div className="empty">No tax codes defined.</div></td></tr>}</tbody></table></div></div>
       <form className="card workspace-form" onSubmit={createTax}><h2>Create a tax code</h2><p className="workspace-disclaimer">Use only rates and recoverability rules confirmed by your accountant. A zero-rated sale, exempt sale and out-of-scope sale are distinct classifications.</p>
-      <div className="workspace-fields"><label>Code<input required value={code} maxLength={24} onChange={e=>setCode(e.target.value)}/></label><label>Label<input required value={label} maxLength={120} onChange={e=>setLabel(e.target.value)}/></label><label>Direction<select value={kind} onChange={e=>setKind(e.target.value)}><option value="sale">Sale</option><option value="purchase">Purchase</option></select></label><label>Classification<select value={classification} onChange={e=>setClassification(e.target.value)}>{['taxable','zero_rated','exempt','out_of_scope'].map(v=><option value={v} key={v}>{v}</option>)}</select></label><label>Rate (basis points)<input required type="number" min="0" max="2500" step="1" disabled={classification!=='taxable'} value={classification==='taxable'?rate:'0'} onChange={e=>setRate(e.target.value)}/></label><label>Recoverable (%) basis points<input required type="number" min="0" max="10000" step="1" disabled={kind!=='purchase'} value={kind==='purchase'?recoverable:'0'} onChange={e=>setRecoverable(e.target.value)}/></label></div><button disabled={busy} className="primary">Create tax code</button></form>
+      <div className="workspace-fields"><label>Code<input required value={code} maxLength={24} onChange={e=>setCode(e.target.value)}/></label><label>Label<input required value={label} maxLength={120} onChange={e=>setLabel(e.target.value)}/></label><label>Direction<select value={kind} onChange={e=>setKind(e.target.value)}><option value="sale">Sale</option><option value="purchase">Purchase</option></select></label><label>Classification<select value={classification} onChange={e=>setClassification(e.target.value)}>{['taxable','zero_rated','exempt','out_of_scope'].map(v=><option value={v} key={v}>{v}</option>)}</select></label><label>Rate (basis points)<input required type="number" min="0" max="2500" step="1" disabled={classification!=='taxable'} value={classification==='taxable'?rate:'0'} onChange={e=>setRate(e.target.value)}/></label><label>Recoverable (%) basis points<input required type="number" min="0" max="10000" step="1" disabled={kind!=='purchase'} value={kind==='purchase'?recoverable:'0'} onChange={e=>setRecoverable(e.target.value)}/></label><label>Effective from<input type="date" required value={effectiveFrom} onChange={e=>setEffectiveFrom(e.target.value)}/></label><label>Effective until (optional)<input type="date" min={effectiveFrom} value={effectiveUntil} onChange={e=>setEffectiveUntil(e.target.value)}/></label></div><button disabled={busy} className="primary">Create tax code</button></form>
     </>}
     {mode==='banking'&&<>
+      <div className="card workspace-form"><h2>Designate a bank account</h2><p>Only explicit bank accounts are eligible for bank reconciliation.</p><div className="workspace-fields"><label>Asset account<select value={bankFlagAccount} onChange={e=>setBankFlagAccount(e.target.value)}><option value="">Select asset account</option>{accounts.filter(a=>a.account_type==='asset'&&!a.is_bank_account).map(a=><option key={a.id} value={a.id}>{a.code} · {a.name}</option>)}</select></label><button type="button" className="primary" disabled={busy||!bankFlagAccount} onClick={designateBank}>Mark as bank account</button></div></div>
       <form className="card workspace-form" onSubmit={createStatement}><h2>Create a bank statement</h2><p>Import an account statement into staging, then match each line to a previously posted journal.</p>
-      <div className="workspace-fields"><label>Asset/bank account<select required value={accountId} onChange={e=>setAccountId(e.target.value)}><option value="">Select bank account</option>{accounts.filter(a=>a.account_type==='asset').map(a=><option key={a.id} value={a.id}>{a.code} · {a.name}</option>)}</select></label><label>Start<input type="date" required value={start} onChange={e=>setStart(e.target.value)}/></label><label>End<input type="date" required min={start} value={end} onChange={e=>setEnd(e.target.value)}/></label><label>Opening (CAD)<input required inputMode="decimal" value={opening} onChange={e=>setOpening(e.target.value)}/></label><label>Closing (CAD)<input required inputMode="decimal" value={closing} onChange={e=>setClosing(e.target.value)}/></label></div><button disabled={busy} className="primary">Create statement</button></form>
+      <div className="workspace-fields"><label>Asset/bank account<select required value={accountId} onChange={e=>setAccountId(e.target.value)}><option value="">Select bank account</option>{accounts.filter(a=>a.is_bank_account).map(a=><option key={a.id} value={a.id}>{a.code} · {a.name}</option>)}</select></label><label>Start<input type="date" required value={start} onChange={e=>setStart(e.target.value)}/></label><label>End<input type="date" required min={start} value={end} onChange={e=>setEnd(e.target.value)}/></label><label>Opening (CAD)<input required inputMode="decimal" value={opening} onChange={e=>setOpening(e.target.value)}/></label><label>Closing (CAD)<input required inputMode="decimal" value={closing} onChange={e=>setClosing(e.target.value)}/></label></div><button disabled={busy} className="primary">Create statement</button></form>
       <div className="card workspace-form"><h2>Bank statement workspace</h2><label className="field-label">Select statement<select value={activeStatement} onChange={e=>setActiveStatement(e.target.value)}><option value="">Choose a statement</option>{statements.map(s=><option key={s.id} value={s.id}>{s.start_date} to {s.end_date} · {accounts.find(a=>a.id===s.bank_account_id)?.name||'Account'} · {s.status}</option>)}</select></label>
       {current&&<><div className="bank-summary"><span>Opening <strong>{formatMoney(Math.round(Number(current.opening_balance)*100))}</strong></span><span>Imported change <strong>{formatMoney(importedSum)}</strong></span><span>Expected closing <strong>{formatMoney(Math.round(Number(current.closing_balance)*100))}</strong></span><span>Unmatched <strong>{activeRows.length}</strong></span></div>
       {current.status==='open'&&<><p className="workspace-disclaimer">CSV format: date,description,amount,reference. Dates must be YYYY-MM-DD; positive amounts are deposits, negative amounts are withdrawals. Preserve row order when reimporting the same file. Imports are capped at 500 rows per batch.</p>
