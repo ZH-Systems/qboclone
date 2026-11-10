@@ -51,7 +51,7 @@ Current **semantic conversion**:
 - Invoices and bills to target drafts, with line accounts mapped through source-to-target account references.
 - Explicit, accountant-approved posting of invoices and bills only after source totals exactly match the generated target documents.
 - Payment allocations to the corresponding posted invoice or bill using the original source transaction links and deterministic idempotency keys.
-- Standalone historical journals, credits, refunds, tax codes, attachments, inventory transactions, opening balances and bank transactions **remain archived for further mapping or manually controlled import**. Automatic combined historical GL and document replay is prohibited because of double-counting risk.
+- **Linked credit notes and vendor credits** can be explicitly mapped to a posted source invoice/bill, reviewed, matched by source total and posted. Unapplied credits remain archived and block complete financial cutover approval.\n- **Standalone historical journals** can be approved individually by an accountant, mapped through source account IDs, and posted idempotently. Journals already represented by imported invoices/bills must never be approved as standalone.\n- Refunds, payroll, unapplied credits, tax codes, attachments, inventory transactions, opening balances and unmatched bank transactions **remain archived for further mapping or manually controlled import**. Automatic combined historical GL and document replay is prohibited because of double-counting risk.
 - QBO financial source reports (Trial Balance, Balance Sheet, P&L, Aged AR, Aged AP) can be captured and SHA-256 referenced as reconciliation evidence.
 
 The cutover workflow:
@@ -62,9 +62,9 @@ The cutover workflow:
 5. Owner/accountant approves the source batch.
 6. Import mapped accounts, contacts and documents as drafts.
 7. Reconcile source tax and document amounts with target documents; explicitly post reviewed documents and allocations, up to 50 items per transaction.
-8. Compare source financial reports with target PostgreSQL ledger calculations, record evidence for six categories and obtain accountant signoff.
-9. Independently validate all archived records that have no target mapping. Financial cutover signoff does **not** certify that inventory, payroll, foreign currency, every attachment and all special tax scenarios have been converted.
-10. Freeze the source ledger and document the delta migration/cutover window. A live production cutover plan requires a restore rehearsal and source/target rollback policies.
+8. Map eligible source credit notes to posted documents, and explicitly approve truly standalone journals before posting.\n9. Compare source financial reports with target PostgreSQL ledger calculations, record evidence for six categories and obtain accountant signoff.
+10. Independently validate all archived records that have no target mapping. Financial cutover signoff does **not** certify that inventory, payroll, foreign currency, every attachment and all special tax scenarios have been converted.
+11. Freeze the source ledger and document the delta migration/cutover window. A live production cutover plan requires a restore rehearsal and source/target rollback policies.
 
 ### Required Intuit environment variables
 ```env
