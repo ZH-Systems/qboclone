@@ -6,7 +6,9 @@ type FeedAccount={connection_id:string;feed_account_id:string;provider_account_i
 type FeedRow={id:string;feed_account_id:string;description:string;booking_date:string;amount:number;pending:boolean;removed:boolean}
 type LedgerAccount={id:string;code:string;name:string;is_bank_account:boolean}
 type Statement={id:string;bank_account_id:string;start_date:string;end_date:string;status:string}
-type Migration={id:string;state:string;source_system:string;source_company_id:string|null;created_at:string}
+type Migration={id:string;state:string;source_system:string;source_company_id:string|null;created_at:string;source_as_of:string|null;financial_cutover_approved_at:string|null}
+type SourceReport={id:string;report_type:string;period_start:string;period_end:string;content_sha256:string}
+type Control={control_name:string;source_amount:number;target_amount:number;difference:number;reviewed_at:string}
 type Qbo={realm_id:string;status:string;connected_at:string}
 const types=['Account','Customer','Vendor','TaxCode','Invoice','Bill','CreditMemo','VendorCredit',
  'Payment','BillPayment','JournalEntry','Attachable','Purchase','Deposit','SalesReceipt',
@@ -61,24 +63,39 @@ export default function BankFeedMigrationWorkspace({organizationId,role,notify}:
  const [progress,setProgress]=useState('')
  const [busy,setBusy]=useState(false)
  const [sourceFile,setSourceFile]=useState<File|null>(null)
+ const [sourceReports,setSourceReports]=useState<SourceReport[]>([])
+ const [controls,setControls]=useState<Control[]>([])
+ const [reportType,setReportType]=useState('TrialBalance')
+ const [reportStart,setReportStart]=useState(new Date().toISOString().slice(0,4)+'-01-01')
+ const [reportEnd,setReportEnd]=useState(new Date().toISOString().slice(0,10))
+ const [controlName,setControlName]=useState('trial_balance')
+ const [controlReportId,setControlReportId]=useState('')
+ const [sourceAmount,setSourceAmount]=useState('')
+ const [targetAmount,setTargetAmount]=useState('')
+ const [controlNotes,setControlNotes]=useState('')
  const canManage=['owner','administrator','accountant'].includes(role)
  const load=useCallback(async()=>{
   if(!supabase||!organizationId)return
-  const [f,t,a,q,b,st]=await Promise.all([
+  const [f,t,a,q,b,st,sr,cr]=await Promise.all([
    supabase.rpc('bank_feed_overview',{p_org:organizationId}),
    supabase.from('bank_feed_transactions').select('id,feed_account_id,description,booking_date,amount,pending,removed')
     .eq('organization_id',organizationId).order('booking_date',{ascending:false}).limit(100),
    supabase.from('accounts').select('id,code,name,is_bank_account').eq('organization_id',organizationId).eq('is_bank_account',true),
    supabase.rpc('qbo_connection_overview',{p_org:organizationId}),
-   supabase.from('migration_batches').select('id,state,source_system,source_company_id,created_at')
+   supabase.from('migration_batches').select('id,state,source_system,source_company_id,source_as_of,financial_cutover_approved_at,created_at')
     .eq('organization_id',organizationId).order('created_at',{ascending:false}).limit(40),
    supabase.from('bank_statements').select('id,bank_account_id,start_date,end_date,status')
-    .eq('organization_id',organizationId).eq('status','open').order('end_date',{ascending:false}).limit(100)
+    .eq('organization_id',organizationId).eq('status','open').order('end_date',{ascending:false}).limit(100),
+   supabase.from('migration_source_reports').select('id,report_type,period_start,period_end,content_sha256')
+    .eq('organization_id',organizationId).limit(150),
+   supabase.from('migration_reconciliation_signoffs').select('control_name,source_amount,target_amount,difference,reviewed_at')
+    .eq('organization_id',organizationId).limit(150)
   ])
-  for(const result of [f,t,a,q,b,st])if(result.error)throw result.error
+  for(const result of [f,t,a,q,b,st,sr,cr])if(result.error)throw result.error
   setOverview((f.data||[]) as FeedAccount[]);setTransactions((t.data||[]) as FeedRow[])
   setAccounts((a.data||[]) as LedgerAccount[]);setConnections((q.data||[]) as Qbo[])
   setBatches((b.data||[]) as Migration[]);setStatements((st.data||[]) as Statement[])
+  setSourceReports((sr.data||[]) as SourceReport[]);setControls((cr.data||[]) as Control[])
  },[organizationId])
  useEffect(()=>{setReport(null);setBatches([]);setOverview([]);void load().catch(e=>notify(e.message,true))},[load])
  const run=(work:()=>Promise<void>)=>{setBusy(true);void work().catch(e=>notify(
@@ -178,6 +195,37 @@ export default function BankFeedMigrationWorkspace({organizationId,role,notify}:
   if(error)throw error
   await load();notify('Safe import step complete, '+Number(data?.imported_this_batch||0)+' records.')
  })
+ const postFinancials=()=>run(async()=>{
+  if(!supabase||!selectedBatch)throw new Error('Select a migration batch')
+  if(!window.confirm('This posts accountant-approved source invoices/bills and payment allocations to the ledger. Confirm source tax and account mappings first.'))return
+  const {data,error}=await supabase.rpc('post_approved_migration_financials',{
+   p_org:organizationId,p_batch:selectedBatch})
+  if(error)throw error
+  await load();notify(Number(data?.posted_this_batch||0)+' financial source items posted.')
+ })
+ const captureReport=()=>run(async()=>{
+  if(!selectedBatch)throw new Error('Select a migration batch')
+  const result=await callApi('/qbo/migration/report',{
+   organizationId,batchId:selectedBatch,reportType,startDate:reportStart,endDate:reportEnd})
+  await load();notify('Archived '+reportType+' report, SHA-256 '+String(result.sha256).slice(0,12)+'.')
+ })
+ const recordControl=(e:FormEvent)=>{e.preventDefault();run(async()=>{
+  if(!supabase||!selectedBatch||!controlReportId)throw new Error('Choose a source report and batch')
+  const {error}=await supabase.rpc('record_migration_reconciliation',{
+   p_org:organizationId,p_batch:selectedBatch,p_control:controlName,
+   p_source:sourceAmount,p_target:targetAmount,p_source_report:controlReportId,
+   p_notes:controlNotes})
+  if(error)throw error
+  await load();notify('Accountant reconciliation recorded against live target ledger.')
+ })}
+ const acceptCutover=()=>run(async()=>{
+  if(!supabase||!selectedBatch)throw new Error('Select a migration batch')
+  if(!window.confirm('Finalize accountant signoff? Six evidenced reconciliations must agree with the live ledger.'))return
+  const {error}=await supabase.rpc('accept_migration_financial_cutover',{
+   p_org:organizationId,p_batch:selectedBatch})
+  if(error)throw error
+  await load();notify('Financial cutover evidence accepted. Commercial launch controls remain separate.')
+ })
  const stageJson=()=>run(async()=>{
   if(!supabase||!selectedBatch||!sourceFile)throw new Error('Select a batch and JSON source file')
   if(sourceFile.size>10*1024*1024)throw new Error('JSON source bundle must be under 10 MiB')
@@ -262,8 +310,33 @@ export default function BankFeedMigrationWorkspace({organizationId,role,notify}:
     <p>Preflight checks source references and GL discrepancies. Imported contacts, accounts and invoices/bills are safe drafts. Bank feeds, historical journals, tax codes, payments, attachments and other source transactions remain archived for accountant mapping. Do not finalize go-live until balance and completeness controls pass.</p>
     <div className="workspace-toolbar"><button disabled={busy||!selectedBatch} onClick={preview}>Review records</button>
      <button disabled={busy||!selectedBatch||!canManage} onClick={approve}>Approve source review</button>
-     <button disabled={busy||!selectedBatch||!canManage} onClick={importSafe}>Import mapped safe records</button></div>
+     <button disabled={busy||!selectedBatch||!canManage} onClick={importSafe}>Import mapped safe records</button>
+     <button disabled={busy||!selectedBatch||!canManage} onClick={postFinancials}>Post approved financials (up to 50)</button></div>
     {report&&<pre className="migration-review">{JSON.stringify(report,null,2)}</pre>}
+   </div>
+   <div className="card workspace-form"><h2>Accountant cutover reconciliation</h2>
+    <p>Capture original QuickBooks reports and verify each reported balance against the live target ledger. The server recalculates target balances and rejects mismatches. Financial cutover requires six evidenced controls with differences at most $0.01, all open source invoices/bills and allocated payments posted, and a signed-off import batch.</p>
+    <div className="workspace-fields">
+     <label>QuickBooks report<select value={reportType} onChange={e=>setReportType(e.target.value)}>
+      {['TrialBalance','BalanceSheet','ProfitAndLoss','AgedReceivables','AgedPayables'].map(t=><option key={t} value={t}>{t}</option>)}</select></label>
+     <label>Start date<input type="date" value={reportStart} onChange={e=>setReportStart(e.target.value)}/></label>
+     <label>As-of date<input type="date" value={reportEnd} onChange={e=>setReportEnd(e.target.value)}/></label>
+    </div>
+    <button disabled={!canManage||busy||!selectedBatch} onClick={captureReport}>Capture source report</button>
+    <form onSubmit={recordControl} className="workspace-fields">
+     <label>Control<select value={controlName} onChange={e=>setControlName(e.target.value)}>
+      {['trial_balance','accounts_receivable','accounts_payable','bank_cash','gst_hst','historic_profit_loss'].map(t=><option key={t} value={t}>{t}</option>)}</select></label>
+     <label>Source report<select required value={controlReportId} onChange={e=>setControlReportId(e.target.value)}>
+      <option value="">Select captured report</option>{sourceReports.map(r=><option key={r.id} value={r.id}>{r.report_type} · {r.period_end}</option>)}</select></label>
+     <label>Source balance (CAD)<input required inputMode="decimal" value={sourceAmount} onChange={e=>setSourceAmount(e.target.value)}/></label>
+     <label>Target balance (CAD)<input required inputMode="decimal" value={targetAmount} onChange={e=>setTargetAmount(e.target.value)}/></label>
+     <label>Accountant review notes<input required minLength={10} value={controlNotes} onChange={e=>setControlNotes(e.target.value)}/></label>
+     <button className="primary" disabled={busy||!canManage||!selectedBatch}>Record balance control</button>
+    </form>
+    <div className="table-wrap"><table><thead><tr><th>Control</th><th>Source</th><th>Target</th><th>Difference</th></tr></thead>
+     <tbody>{controls.map(c=><tr key={c.control_name}><td>{c.control_name}</td><td>{money(Number(c.source_amount))}</td>
+      <td>{money(Number(c.target_amount))}</td><td>{money(Number(c.difference))}</td></tr>)}</tbody></table></div>
+    <button className="primary" disabled={!selectedBatch||!canManage||busy} onClick={acceptCutover}>Accept reconciled migration cutover</button>
    </div>
   </>}
  </section>
