@@ -58,14 +58,13 @@ for(const [jwt,own,other] of [[jwtA,orgA,orgB],[jwtB,orgB,orgA]]){
  for(const table of ['organizations','financial_documents','journal_entries',
    'inventory_products','bank_feed_accounts','migration_batches',
    'receipt_documents','vendor_advances','foreign_document_payments']){
-  const result=await db.from(table).select('organization_id', {head:false}).eq('organization_id',other).limit(1)
-  // organizations uses id rather than organization_id.
   if(table==='organizations'){
    const cross=await db.from('organizations').select('id').eq('id',other)
    assert.ifError(cross.error)
    assert.equal(cross.data?.length,0,'Cross-tenant organization exposed')
    continue
   }
+  const result=await db.from(table).select('organization_id').eq('organization_id',other).limit(1)
   if(result.error)throw new Error(table+' RLS query failed: '+result.error.message)
   assert.equal(result.data?.length,0,table+' exposed cross-tenant rows')
  }
