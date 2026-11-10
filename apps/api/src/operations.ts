@@ -20,6 +20,7 @@ export const EXPORT_TABLES:ReadonlyArray<{name:string;columns:string}>=[
  {name:'organization_usage_monthly',columns:'organization_id,month_start,metric,units'},
  {name:'audit_events',columns:'id,organization_id,actor_user_id,action,entity_type,entity_id,details,occurred_at'}
 ]
+const ORDER_COLUMNS:Record<string,string>={organization_members:'user_id',journal_reversals:'original_journal_id',organization_usage_monthly:'month_start'}
 const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 export function requireOrganizationId(value:unknown):string{
  if(typeof value!=='string'||!uuid.test(value))throw new Error('Invalid organization identifier')
@@ -61,6 +62,7 @@ export async function buildOrganizationExport(db:SupabaseClient,orgId:string,lim
   for(let offset=0;offset<=limitPerTable;offset+=500){
    const query=db.from(definition.name).select(definition.columns)
      .eq(definition.name==='organizations'?'id':'organization_id',orgId)
+     .order(ORDER_COLUMNS[definition.name]||'id',{ascending:true})
      .range(offset,Math.min(offset+499,limitPerTable))
    const {data,error}=await query
    if(error)throw new Error('Export failed for '+definition.name)
@@ -73,9 +75,4 @@ export async function buildOrganizationExport(db:SupabaseClient,orgId:string,lim
   result.push({...definition,data:rows})
  }
  return {version:1,organization_id:orgId,generated_at:new Date().toISOString(),tables:result}
-}
-export function exportAsCsvBundle(exportData:Awaited<ReturnType<typeof buildOrganizationExport>>):string{
- // A JSON container preserves exact decimals, column types, and embedded CSV-safe data.
- // This function is reserved for optional per-table CSV development tooling.
- return JSON.stringify(exportData)
 }
