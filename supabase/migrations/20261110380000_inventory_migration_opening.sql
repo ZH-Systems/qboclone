@@ -128,7 +128,7 @@ grant select on public.migration_inventory_items to authenticated;
 
 create function public.import_qbo_inventory_products(p_org uuid,p_batch uuid,p_limit integer default 100)
 returns jsonb language plpgsql security definer set search_path=''
-as $
+as $$
 declare v_row public.migration_records%rowtype;v_product uuid;v_sku text;v_name text;
  v_raw jsonb;v_type text;v_qty numeric;v_unit_cost numeric;v_count integer:=0;
 begin
@@ -173,7 +173,7 @@ begin
  jsonb_build_object('mapped_products',v_count,'stock_value_posted',false));
  return jsonb_build_object('mapped_products',v_count,'stock_value_posted',false,
   'requires_source_valuation_review',true);
-end $;
+end $$;
 
 -- The source opening journal must also be protected from manual reversal.
 create or replace function public.reverse_manual_journal(
