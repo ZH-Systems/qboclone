@@ -7,7 +7,8 @@ export const QBO_TYPES=[
 export type QboType=typeof QBO_TYPES[number]
 export type MigrationKind='account'|'customer'|'vendor'|'tax_code'|'invoice'|'bill'|
  'credit_note'|'vendor_credit'|'payment'|'bill_payment'|'journal'|'opening_balance'|
- 'attachment'|'bank_transaction'
+ 'attachment'|'bank_transaction'|'inventory_item'|'purchase'|'deposit'|'sales_receipt'|
+ 'refund_receipt'|'transfer'|'estimate'|'purchase_order'
 export type SourceRecord={source_id:string;[key:string]:unknown}
 const id=(v:unknown):string=>String(v??'').trim()
 const val=(v:unknown):string=>typeof v==='string'?v:String(v??'')
@@ -87,8 +88,12 @@ export function normalizeQbo(type:QboType,source:Record<string,unknown>):{
     credit:detail.PostingType==='Credit'?amount:0}
   }),post_as_standalone:false,qbo_raw_journal:true}}
  if(type==='Attachable')return {kind:'attachment',record:base}
- if(['Purchase','Deposit','SalesReceipt','RefundReceipt','Transfer','Estimate','PurchaseOrder','Item'].includes(type))
-  return {kind:'bank_transaction',record:{...base,archive_entity:type}}
+ if(['Purchase','Deposit','SalesReceipt','RefundReceipt','Transfer','Estimate','PurchaseOrder','Item'].includes(type)){
+  const kinds:Record<string,MigrationKind>={Purchase:'purchase',Deposit:'deposit',SalesReceipt:'sales_receipt',
+   RefundReceipt:'refund_receipt',Transfer:'transfer',Estimate:'estimate',PurchaseOrder:'purchase_order',
+   Item:'inventory_item'}
+  return {kind:kinds[type],record:base}
+ }
  return null
 }
 export function normalizeQboPage(type:QboType,items:Record<string,unknown>[]){
