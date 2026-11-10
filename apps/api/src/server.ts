@@ -3,7 +3,7 @@ import cors from '@fastify/cors'
 import Stripe from 'stripe'
 import {createClient} from '@supabase/supabase-js'
 import {readConfig} from './config.js'
-import {requireOwner,resolvePrice,subscriptionOrganization,subscriptionPrice,paymentStatus} from './billing.js'
+import {requireOwner,resolvePrice,subscriptionOrganization,subscriptionPrice,paymentStatus,subscriptionPeriodEnd} from './billing.js'
 const config=readConfig()
 const stripe=new Stripe(config.stripeKey)
 const db=createClient(config.supabaseUrl,config.serviceRoleKey,{auth:{persistSession:false,autoRefreshToken:false}})
@@ -97,7 +97,7 @@ app.post('/stripe/webhook',{config:{rawBody:true}},async(req,reply)=>{
       p_event_id:event.id,p_event_created:event.created,p_org:org,
       p_customer:typeof sub.customer==='string'?sub.customer:sub.customer.id,
       p_subscription:sub.id,p_price:price,p_status:paymentStatus(event,sub),
-      p_period_end:null,p_cancel_at_period_end:sub.cancel_at_period_end,
+      p_period_end:subscriptionPeriodEnd(sub),p_cancel_at_period_end:sub.cancel_at_period_end,
       p_event_type:event.type
     })
     if(error)throw error
