@@ -11,6 +11,7 @@ Apply all earlier migrations, then the following in filename order, in a disposa
 - `20261110060000_bank_account_types.sql`
 - `20261110070000_effective_tax_rules.sql`
 - `20261110080000_bank_import_reset.sql`
+- `20261110090000_strict_idempotency.sql`
 
 Migrations are deliberately nonreplayable and should be applied once. Backup and inspect schema before any deployment. Do **not** run them on a production database without verification.
 
@@ -28,6 +29,7 @@ Migrations are deliberately nonreplayable and should be applied once. Backup and
 - Manual bank transaction-to-existing-journal matching by signed bank account delta.
 - Reconciliation requiring matched rows, statement opening/closing arithmetic and agreement with the ledger balance.
 - Protection against backdated posting to previously reconciled bank accounts.
+- Rejection of conflicting retries where a caller reuses the same journal or payment idempotency key with changed fields.
 - UI sections for tax codes, bank statements, draft edits, draft voiding and per-line posting accounts.
 
 ## Accounting caution
@@ -69,6 +71,7 @@ A statement is one account and one date range. Overlapping statement date ranges
 - Reconcile a statement, then verify it rejects unmatching and backdated journal postings.
 - Verify RLS and `SECURITY DEFINER` functions with test JWTs.
 - Confirm multi-tenant import performance and errors under 500+ lines.
+- Verify a reused payment or manual journal idempotency key with modified details raises an error.
 - Obtain accounting and application-security review.
 
 ## Known limitations and next work
