@@ -247,10 +247,10 @@ export default function BankFeedMigrationWorkspace({organizationId,role,notify}:
  })
  const importInventoryCatalog=()=>run(async()=>{
   if(!supabase||!selectedBatch)throw new Error('Select a reviewed QuickBooks migration batch')
-  const {data,error}=await supabase.rpc('import_qbo_inventory_catalog',{
+  const {data,error}=await supabase.rpc('import_qbo_inventory_products',{
    p_org:organizationId,p_batch:selectedBatch,p_limit:100})
   if(error)throw error
-  notify(String(data?.products_imported||0)+' inventory SKUs imported. Stock valuation remains unposted until reviewed.')
+  notify(String(data?.mapped_products||0)+' inventory SKUs imported. Stock valuation remains unposted until reviewed.')
  })
  const postExtended=()=>run(async()=>{
   if(!supabase||!selectedBatch)throw new Error('Select a migration batch')
