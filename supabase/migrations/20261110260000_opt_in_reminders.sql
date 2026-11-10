@@ -105,7 +105,7 @@ begin
   if v_outstanding<=0 then continue;end if;
   insert into public.invoice_reminder_states(organization_id,invoice_id,reserved_at,attempt_count)
   values(v.organization_id,v.id,now(),1)
-  on conflict(organization_id,invoice_id) do update
+  on conflict on constraint invoice_reminder_states_pkey do update
     set reserved_at=now(),attempt_count=public.invoice_reminder_states.attempt_count+1;
   organization_id:=v.organization_id;
   invoice_id:=v.id;invoice_number:=v.document_number;
