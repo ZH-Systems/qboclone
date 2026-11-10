@@ -92,3 +92,23 @@
 .advanced-extras>.workspace-form{display:grid;gap:20px}
 .advanced-extras .workspace-toolbar{display:flex;align-items:center;justify-content:space-between}
 @media(max-width:800px){.advanced-inline-form .workspace-fields{grid-template-columns:1fr}}
+
+/* Milestone 7: workflows, private receipt review, import previews and bank mapping */
+.automation-workspace{display:grid;gap:18px}
+.automation-workspace .workspace-form{padding:24px;display:grid;gap:17px}
+.automation-workspace .workspace-fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px}
+.automation-workspace .workspace-fields label,.automation-workspace .workspace-form>label{display:flex;flex-direction:column;gap:8px;font-size:12px;font-weight:680;color:#365173}
+.automation-workspace .workspace-toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:10px}
+.automation-workspace .workspace-toolbar button{max-width:100%;padding:9px 13px}
+.automation-workspace .workspace-form input,.automation-workspace .workspace-form select{width:100%;min-width:0}
+.automation-workspace .ocr-consent{display:flex!important;flex-direction:row!important;align-items:flex-start;gap:10px}
+.automation-workspace .ocr-consent input{width:auto;flex:none;margin-top:3px}
+.automation-workspace .ocr-preview{border:1px solid #d8e4f3;border-radius:9px;background:#f6f9fe;padding:16px}
+.automation-workspace .ocr-preview pre{overflow:auto;max-height:210px;font-size:12px;white-space:pre-wrap}
+.automation-workspace .table-wrap{overflow:auto;max-height:420px}
+.bank-mapper{display:grid;gap:12px;border:1px solid #d7e4f0;border-radius:9px;padding:17px;background:#f8fafd;margin:16px 0}
+.bank-mapper h3{margin:0;font-size:14px;color:#1a416b}
+.bank-mapper p{font-size:12px;color:#687c91}
+.bank-mapper .workspace-fields{grid-template-columns:repeat(auto-fit,minmax(155px,1fr))}
+.bank-mapper input[type=file]{width:100%}
+@media(max-width:740px){.automation-workspace .workspace-fields,.bank-mapper .workspace-fields{grid-template-columns:1fr}.automation-workspace .advanced-tabs{grid-template-columns:1fr 1fr}}
