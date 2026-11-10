@@ -2,10 +2,14 @@
 -- Never apply this bootstrap to a real Supabase database.
 create role authenticated nologin;
 create role anon nologin;
+create role service_role nologin;
+create schema extensions;
+create extension if not exists pgcrypto with schema extensions;
 create schema auth;
 create table auth.users(
   id uuid primary key,
   email text,
+  email_confirmed_at timestamptz,
   role text,
   aud text,
   created_at timestamptz,
