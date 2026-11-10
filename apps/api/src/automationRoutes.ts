@@ -111,6 +111,49 @@ export async function registerAutomationRoutes(app:FastifyInstance,db:SupabaseCl
    return data
   }catch(e){req.log.error(e);return reply.code(500).send({error:'Scheduler failed'})}
  })
+ app.post('/automation/reminders/run',{config:{rateLimit:{max:4,timeWindow:'1 minute'}}},async(req,reply)=>{
+  const provided=req.headers['x-worker-secret']
+  if(!config.workerSecret||typeof provided!=='string')
+   return reply.code(401).send({error:'Worker credentials required'})
+  const a=Buffer.from(provided),b=Buffer.from(config.workerSecret)
+  if(a.length!==b.length||!timingSafeEqual(a,b))
+   return reply.code(401).send({error:'Invalid worker credential'})
+  if(!config.emailApiKey||!config.emailFrom)
+   return reply.code(503).send({error:'Invitation email provider is not configured'})
+  const {data:claims,error}=await db.rpc('claim_due_invoice_reminders',{p_limit:20})
+  if(error){req.log.error(error);return reply.code(500).send({error:'Reminder claim failed'})}
+  let sent=0,failed=0
+  for(const claim of (claims||[]) as {organization_id:string;invoice_id:string;contact_email:string;
+   invoice_number:string;organization_name:string}[]){
+   let successful=false
+   let messageId:string|null=null
+   try{
+    const details=await pdfDetails(db,claim.organization_id,claim.invoice_id)
+    if(details.customerEmail?.toLowerCase()!==claim.contact_email.toLowerCase())
+     throw new Error('Customer email changed after reminder claim')
+    const pdf=await createInvoicePdf(details)
+    const response=await fetch('https://api.resend.com/emails',{
+     method:'POST',headers:{Authorization:'Bearer '+config.emailApiKey,'Content-Type':'application/json'},
+     body:JSON.stringify({from:config.emailFrom,to:[claim.contact_email],
+      subject:'Payment reminder: '+claim.invoice_number,
+      text:'The attached invoice is overdue. If payment has already been made, please disregard this reminder.',
+      attachments:[{filename:'invoice-'+claim.invoice_number+'.pdf',
+       content:Buffer.from(pdf).toString('base64')}]}),
+     signal:AbortSignal.timeout(12000)})
+    const body=await response.json().catch(()=>({})) as {id?:string}
+    successful=response.ok
+    messageId=body.id||null
+    if(!response.ok)throw new Error('Email provider rejected reminder')
+    sent++
+   }catch(e){req.log.error({invoiceId:claim.invoice_id,error:e},'Automatic reminder failed');failed++}
+   const {error:finishError}=await db.rpc('finish_invoice_reminder',{
+    p_org:claim.organization_id,p_invoice:claim.invoice_id,
+    p_succeeded:successful,p_provider_id:messageId})
+   if(finishError)req.log.error({invoiceId:claim.invoice_id,error:finishError},
+    'Reminder delivery state could not be persisted')
+  }
+  return {claimed:(claims||[]).length,sent,failed}
+ })
  app.post('/invoices/:id/pdf',async(req,reply)=>{
   try{
    const id=paramsObject(req.params).id
