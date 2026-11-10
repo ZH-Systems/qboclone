@@ -155,6 +155,10 @@ begin
  from public.foreign_document_payments where organization_id=p_org and document_id=p_doc;
  if p_foreign_amount>d.foreign_total-v_paid_foreign then
  raise exception 'FX settlement exceeds original foreign amount';end if;
+ -- CAD book allocation must derive from the original recognition rate;
+ -- actual bank CAD proceeds are supplied separately for realized FX gain/loss.
+ if abs(p_cad_book_amount-round(p_foreign_amount*d.recognition_rate_cad,2))>0.01 then
+  raise exception 'CAD book allocation must equal foreign payment at original recognition rate';end if;
  select id into v_ar from public.accounts where organization_id=p_org
   and code=case when d.document_type='invoice' then '1100' else '2000' end and is_active;
  select id into v_bank from public.accounts where organization_id=p_org and code='1000' and is_active;
