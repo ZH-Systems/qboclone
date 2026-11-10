@@ -155,4 +155,44 @@ export async function registerQboRoutes(app:FastifyInstance,db:SupabaseClient,co
   }catch(e){req.log.error({message:e instanceof Error?e.message:'QBO pagination'},'QBO import failed')
    return safeReply(reply,e)}
  })
+ app.post('/qbo/migration/report',{config:{rateLimit:{max:15,timeWindow:'1 minute'}}},async(req,reply)=>{
+  try{
+   const payload=rawJson(req.body),org=requireOrganizationId(payload.organizationId)
+   const user=await verifyUser(db,req.headers.authorization,org)
+   const batchId=payload.batchId,reportType=payload.reportType
+   const start=payload.startDate,end=payload.endDate
+   const reports=['TrialBalance','BalanceSheet','ProfitAndLoss','AgedReceivables','AgedPayables']
+   if(typeof batchId!=='string'||!reports.includes(String(reportType))||
+    typeof start!=='string'||typeof end!=='string'||
+    !/^\\d{4}-\\d{2}-\\d{2}$/.test(start)||!/^\\d{4}-\\d{2}-\\d{2}$/.test(end)||
+    start>end)throw new Error('Invalid QuickBooks report request')
+   const {data:batch,error:batchError}=await db.from('migration_batches')
+    .select('source_company_id,state').eq('organization_id',org).eq('id',batchId).maybeSingle()
+   if(batchError||!batch)throw new Error('Migration batch not found')
+   const {data:connection,error:cError}=await db.from('qbo_connections').select('*')
+    .eq('organization_id',org).eq('realm_id',batch.source_company_id).eq('status','active').maybeSingle()
+   if(cError||!connection)throw new Error('QuickBooks company is not connected')
+   const qbo=authConfig(config),access=await validAccess(db,qbo,connection as SourceConnection)
+   const url=new URL((qbo.sandbox?'https://sandbox-quickbooks.api.intuit.com':
+    'https://quickbooks.api.intuit.com')+'/v3/company/'+encodeURIComponent(connection.realm_id)+
+    '/reports/'+encodeURIComponent(String(reportType)))
+   url.searchParams.set('start_date',start);url.searchParams.set('end_date',end)
+   url.searchParams.set('accounting_method','Accrual')
+   const provider=await fetch(url,{headers:{Authorization:'Bearer '+access,Accept:'application/json'},
+    signal:AbortSignal.timeout(30000)})
+   if(!provider.ok)throw new Error('QuickBooks report was unavailable')
+   const raw=await provider.json() as Record<string,unknown>
+   const encodedRaw=JSON.stringify(raw)
+   if(encodedRaw.length>3500000)throw new Error('Source report is too large for current staging')
+   const digest=createHash('sha256').update(encodedRaw).digest('hex')
+   const scoped=scopedSupabase(config.supabaseUrl,config.serviceRoleKey,user.token)
+   const {data:id,error}=await scoped.rpc('store_migration_source_report',{
+    p_org:org,p_batch:batchId,p_report_type:reportType,
+    p_start:start,p_end:end,p_document:raw,p_sha256:digest})
+   if(error)throw new Error('Could not archive QuickBooks report: '+error.message)
+   return {sourceReportId:id,reportType,periodEnd:end,sha256:digest}
+  }catch(e){req.log.error({reason:e instanceof Error?e.message:'QBO report failed'},
+   'QuickBooks source reporting failed');return safeReply(reply,e)}
+ })
+
 }
