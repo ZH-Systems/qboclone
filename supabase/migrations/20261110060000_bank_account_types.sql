@@ -1,6 +1,22 @@
 -- Explicit bank account eligibility and effective-dated tax configurations.
 alter table public.accounts add column if not exists is_bank_account boolean not null default false;
 update public.accounts set is_bank_account=true where code='1000' and account_type='asset';
+
+-- Organizations created after this migration must receive the same default bank flag.
+create function private.flag_default_bank_account()
+returns trigger language plpgsql set search_path=''
+as $$
+begin
+ if new.code='1000' and new.account_type='asset' then
+  new.is_bank_account:=true;
+ end if;
+ return new;
+end $$;
+create trigger accounts_default_bank_flag
+ before insert on public.accounts
+ for each row execute function private.flag_default_bank_account();
+revoke all on function private.flag_default_bank_account() from public,anon,authenticated;
+
 alter table public.accounts add constraint bank_account_asset_only_check
  check(not is_bank_account or account_type='asset');
 alter table public.tax_codes add column effective_from date not null default '1900-01-01';
