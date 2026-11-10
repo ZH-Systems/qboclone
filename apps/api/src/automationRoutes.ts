@@ -77,7 +77,7 @@ export function suggestReceiptFields(text:string):Record<string,unknown>{
 async function visionExtract(apiKey:string,mime:AllowedType,bytes:Buffer):Promise<string>{
  const pdf=mime==='application/pdf'
  const data=pdf?{requests:[{inputConfig:{content:bytes.toString('base64'),mimeType:mime},
-  features:[{type:'DOCUMENT_TEXT_DETECTION'}],pages:[1,2,3,4,5]}]}:
+  features:[{type:'DOCUMENT_TEXT_DETECTION'}]}]}:
   {requests:[{image:{content:bytes.toString('base64')},features:[{type:'DOCUMENT_TEXT_DETECTION'}]}]}
  const endpoint=pdf?'https://vision.googleapis.com/v1/files:annotate':'https://vision.googleapis.com/v1/images:annotate'
  const response=await fetch(endpoint,{method:'POST',headers:{'Content-Type':'application/json','X-goog-api-key':apiKey},
