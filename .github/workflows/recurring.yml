@@ -1,0 +1,50 @@
+name: Generate recurring accounting drafts
+on:
+  schedule:
+    - cron: '15 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate worker configuration
+        env:
+          API_URL: ${{ secrets.QBOCLONE_API_URL }}
+          WORKER_SECRET: ${{ secrets.QBOCLONE_AUTOMATION_WORKER_SECRET }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$API_URL" || { echo 'QBOCLONE_API_URL is missing'; exit 1; }
+          test -n "$WORKER_SECRET" || { echo 'QBOCLONE_AUTOMATION_WORKER_SECRET is missing'; exit 1; }
+          [[ "$API_URL" == https://* ]] || { echo 'Worker API must use HTTPS'; exit 1; }
+      - name: Generate due document drafts
+        env:
+          API_URL: ${{ secrets.QBOCLONE_API_URL }}
+          WORKER_SECRET: ${{ secrets.QBOCLONE_AUTOMATION_WORKER_SECRET }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail-with-body --silent --show-error --max-time 60 \
+            --retry 2 --retry-delay 5 \
+            -X POST "${API_URL%/}/automation/recurring/run" \
+            -H "X-Worker-Secret: $WORKER_SECRET" \
+            -H "Content-Type: application/json" \
+            --data '{}'
+      - name: Send opted-in overdue reminders
+        if: ${{ vars.QBOCLONE_REMINDERS_ENABLED == 'true' }}
+        env:
+          API_URL: ${{ secrets.QBOCLONE_API_URL }}
+          WORKER_SECRET: ${{ secrets.QBOCLONE_AUTOMATION_WORKER_SECRET }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail-with-body --silent --show-error --max-time 90 \
+            --retry 2 --retry-delay 5 \
+            -X POST "${API_URL%/}/automation/reminders/run" \
+            -H "X-Worker-Secret: $WORKER_SECRET" \
+            -H "Content-Type: application/json" \
+            --data '{}'

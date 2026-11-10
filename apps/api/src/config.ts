@@ -2,7 +2,8 @@ export type ServerConfig={
   supabaseUrl:string; serviceRoleKey:string; stripeKey:string;
   webhookSecret:string; webOrigin:string; port:number;
   emailApiKey:string|null; emailFrom:string|null;
-  trustedProxyCidrs:string[]|false
+  trustedProxyCidrs:string[]|false;
+  googleVisionApiKey:string|null; workerSecret:string|null
 }
 export function readConfig(env:NodeJS.ProcessEnv=process.env):ServerConfig{
   const required=(key:string)=>{const value=env[key]?.trim();if(!value)throw new Error('Missing server environment variable: '+key);return value}
@@ -18,5 +19,7 @@ export function readConfig(env:NodeJS.ProcessEnv=process.env):ServerConfig{
     stripeKey:required('STRIPE_SECRET_KEY'),webhookSecret:required('STRIPE_WEBHOOK_SECRET'),
     webOrigin:origin,port,
     emailApiKey:env.RESEND_API_KEY?.trim()||null,emailFrom:env.INVITATION_EMAIL_FROM?.trim()||null,
-    trustedProxyCidrs:env.TRUSTED_PROXY_CIDRS?.trim()?.split(',').map(x=>x.trim()).filter(Boolean)||false}
+    trustedProxyCidrs:env.TRUSTED_PROXY_CIDRS?.trim()?.split(',').map(x=>x.trim()).filter(Boolean)||false,
+    googleVisionApiKey:env.GOOGLE_VISION_API_KEY?.trim()||null,
+    workerSecret:env.AUTOMATION_WORKER_SECRET?.trim()||null}
 }

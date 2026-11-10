@@ -27,10 +27,16 @@ export const EXPORT_TABLES:ReadonlyArray<{name:string;columns:string}>=[
  {name:'tax_codes',columns:'id,organization_id,code,label,transaction_kind,classification,rate_bps,recoverable_bps,active,effective_from,effective_until'},
  {name:'bank_statements',columns:'id,organization_id,bank_account_id,start_date,end_date,opening_balance,closing_balance,status,reconciled_at'},
  {name:'bank_transactions',columns:'id,organization_id,statement_id,line_number,transaction_date,description,reference,signed_amount,matched_journal_entry_id'},
+ {name:'recurring_document_rules',columns:'id,organization_id,source_document_id,cadence,next_run_date,due_offset_days,active,created_at'},
+ {name:'recurring_document_runs',columns:'id,organization_id,rule_id,occurrence_date,document_id,processed_at'},
+ {name:'receipt_documents',columns:'id,organization_id,original_filename,mime_type,content_sha256,content_size,extraction_status,extraction_data,created_at'},
+ {name:'receipt_document_links',columns:'organization_id,receipt_id,financial_document_id,linked_at'},
+ {name:'document_deliveries',columns:'id,organization_id,document_id,recipient_email,delivery_kind,message_id,status,sent_at'},
+ {name:'import_review_batches',columns:'id,organization_id,source_system,entity_kind,source_filename,rows_previewed,rows_imported,created_at'},
  {name:'organization_usage_monthly',columns:'organization_id,month_start,metric,units'},
  {name:'audit_events',columns:'id,organization_id,actor_user_id,action,entity_type,entity_id,details,occurred_at'}
 ]
-const ORDER_COLUMNS:Record<string,string>={organization_members:'user_id',journal_reversals:'original_journal_id',organization_usage_monthly:'month_start',opening_balance_imports:'organization_id',accounting_adjustments:'journal_entry_id'}
+const ORDER_COLUMNS:Record<string,string>={organization_members:'user_id',journal_reversals:'original_journal_id',organization_usage_monthly:'month_start',opening_balance_imports:'organization_id',accounting_adjustments:'journal_entry_id',receipt_document_links:'receipt_id'}
 const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 export function requireOrganizationId(value:unknown):string{
  if(typeof value!=='string'||!uuid.test(value))throw new Error('Invalid organization identifier')

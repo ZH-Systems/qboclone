@@ -41,6 +41,8 @@ jobs:
             echo "Applying $file"
             psql -X -v ON_ERROR_STOP=1 -f "$file"
           done
+      - name: Mirror Supabase service-role table grants in test database
+        run: psql -X -v ON_ERROR_STOP=1 -c "grant all on all tables in schema public to service_role; grant all on all sequences in schema public to service_role"
       - name: Run Milestone 2 SQL regression
         run: psql -X -v ON_ERROR_STOP=1 -f supabase/tests/milestone2_regression.sql
       - name: Run Milestone 3 SQL regression
@@ -53,6 +55,12 @@ jobs:
         run: psql -X -v ON_ERROR_STOP=1 -f supabase/tests/milestone6_regression.sql
       - name: Run Milestone 6 extended ledger regression
         run: psql -X -v ON_ERROR_STOP=1 -f supabase/tests/milestone6_extended_regression.sql
+      - name: Run Milestone 7 automation regression
+        run: psql -X -v ON_ERROR_STOP=1 -f supabase/tests/milestone7_regression.sql
+      - name: Run Milestone 7 OCR quota regression
+        run: psql -X -v ON_ERROR_STOP=1 -f supabase/tests/milestone7_ocr_regression.sql
+      - name: Run Milestone 7 reminder regression
+        run: psql -X -v ON_ERROR_STOP=1 -f supabase/tests/milestone7_reminders_regression.sql
       - name: Verify database backup and disaster recovery restore
         shell: bash
         run: |

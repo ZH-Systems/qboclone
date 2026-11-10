@@ -9,12 +9,13 @@ import {createClient} from '@supabase/supabase-js'
 import {readConfig} from './config.js'
 import {bearerToken,requireOrganizationId,requireOrganizationRole,scopedSupabase,buildOrganizationExport} from './operations.js'
 import {sendInvitationEmail} from './email.js'
+import {registerAutomationRoutes} from './automationRoutes.js'
 import {requireOwner,resolvePrice,subscriptionOrganization,subscriptionPrice,paymentStatus,subscriptionPeriodEnd} from './billing.js'
 const config=readConfig()
 const stripe=new Stripe(config.stripeKey)
 const db=createClient(config.supabaseUrl,config.serviceRoleKey,{auth:{persistSession:false,autoRefreshToken:false}})
-const app=Fastify({logger:{redact:['req.headers.authorization','req.headers.stripe-signature','req.body']},bodyLimit:1024*1024,trustProxy:config.trustedProxyCidrs})
-await app.register(cors,{origin:config.webOrigin,methods:['GET','POST'],allowedHeaders:['Authorization','Content-Type']})
+const app=Fastify({logger:{redact:['req.headers.authorization','req.headers.stripe-signature','req.headers.x-worker-secret','req.headers.x-original-filename','req.body']},bodyLimit:1024*1024,trustProxy:config.trustedProxyCidrs})
+await app.register(cors,{origin:config.webOrigin,methods:['GET','POST'],allowedHeaders:['Authorization','Content-Type','X-Original-Filename','X-External-OCR-Consent']})
 await app.register(helmet,{contentSecurityPolicy:false})
 await app.register(rateLimit,{global:false})
 
@@ -185,4 +186,5 @@ app.post('/stripe/webhook',{config:{rawBody:true}},async(req,reply)=>{
     return reply.code(500).send({error:'Webhook processing failed, Stripe should retry'})
   }
 })
+await registerAutomationRoutes(app,db,config)
 await app.listen({host:'0.0.0.0',port:config.port})
