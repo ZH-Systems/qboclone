@@ -63,6 +63,20 @@ begin
  select coalesce(sum(total_debits-total_credits),0) into v_balance
  from public.ledger_trial_balance(v_org,current_date);
  if v_balance<>0 then raise exception 'Inventory journals unbalanced';end if;
+ v_failed:=false;
+ begin
+  perform public.reverse_manual_journal(v_org,
+   (select journal_entry_id from public.inventory_issues where id=v_issue),
+   current_date,'Should not detach FIFO source posting');
+ exception when others then v_failed:=true;end;
+ if not v_failed then raise exception 'Source FIFO COGS journal could be reversed independently';end if;
+ v_failed:=false;
+ begin
+  perform public.reverse_manual_journal(v_org,
+   (select journal_entry_id from public.inventory_receipts where id=v_rcv1),
+   current_date,'Should not detach inventory receipt');
+ exception when others then v_failed:=true;end;
+ if not v_failed then raise exception 'Source inventory receipt journal could be reversed independently';end if;
  perform set_config('request.jwt.claim.sub','99999999-9999-4999-8999-999999999992',true);
  if exists(select 1 from public.inventory_products where organization_id=v_org)
  then raise exception 'Inventory cross-tenant product leak';end if;
