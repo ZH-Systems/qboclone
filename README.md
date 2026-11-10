@@ -51,6 +51,23 @@ The next milestone implements tenant-defined tax codes and tax snapshots, config
 
 **Do not** treat the current tax configuration as a validated CRA compliance system or use it for production filings. The new migrations and tests must run in development first.
 
+## Milestone 4: SaaS billing and organization administration
+
+Milestone 4 adds team roles, verified-email invitations, accountant access, subscription plan records, Stripe test-mode checkout and customer portal via a **dedicated server-only Fastify API**, Stripe-signed subscription webhooks, seat-limit enforcement, and recent audit events. See [Milestone 4 deployment and security notes](docs/MILESTONE_4.md).
+
+Additional local development commands:
+
+```bash
+npm install
+npm run api:dev   # Server-only Stripe and Supabase secrets in apps/api/.env
+npm run dev       # React/Vite frontend with VITE_BILLING_API_URL
+npm run verify    # Web and API typecheck, tests and builds
+```
+
+The backend is a separate deployment, not a Vercel frontend function. Never place Stripe secrets or Supabase service-role credentials in `VITE_` environment variables.
+
+**Commercial readiness:** current tenant data, financial logic, tax setup, bank imports and subscription operations require independent validation. Do not use this development version for regulatory filings or real business books yet.
+
 ## Scope for next phase
 
 - Financial reporting over complete journals
