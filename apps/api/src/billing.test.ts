@@ -2,7 +2,7 @@ import {describe,expect,it} from 'vitest'
 import {readConfig} from './config.js'
 import {subscriptionPrice} from './billing.js'
 describe('billing boundaries',()=>{
- it('rejects missing server secrets',()=>expect(()=>readConfig({})).toThrow('SUPABASE_URL'))
+ it('rejects missing server secrets',()=>expect(()=>readConfig({})).toThrow('WEB_APP_ORIGIN'))
  it('loads secrets from server environment only',()=>{
   expect(readConfig({SUPABASE_URL:'https://example.supabase.co',SUPABASE_SERVICE_ROLE_KEY:'abc',
    STRIPE_SECRET_KEY:'sk_test_example',STRIPE_WEBHOOK_SECRET:'whsec_example',
