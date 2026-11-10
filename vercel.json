@@ -4,7 +4,7 @@
     "api": {
       "root": "apps/api",
       "framework": "fastify",
-      "entrypoint": "src/server.mts",
+      "entrypoint": "src/server.ts",
       "outputDirectory": "."
     },
     "web": {

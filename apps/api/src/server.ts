@@ -15,6 +15,7 @@ import {registerBankRoutes} from './bankRoutes.js'
 import {registerQboRoutes} from './qboRoutes.js'
 import {registerPlatformAdminRoutes} from './platformAdminRoutes.js'
 import {requireOwner,resolvePrice,subscriptionOrganization,subscriptionPrice,paymentStatus,subscriptionPeriodEnd} from './billing.js'
+async function startServer():Promise<void>{
 const config=readConfig()
 const stripe=config.stripeEnabled ? new Stripe(config.stripeKey!) : null
 const db=createClient(config.supabaseUrl,config.serviceRoleKey,{auth:{persistSession:false,autoRefreshToken:false}})
@@ -210,3 +211,9 @@ await registerBankRoutes(app,db,config)
 await registerQboRoutes(app,db,config)
 await registerPlatformAdminRoutes(app,db,config)
 await app.listen({host:'0.0.0.0',port:config.port})
+}
+
+void startServer().catch((error:unknown)=>{
+  console.error('API startup failed',error)
+  process.exitCode=1
+})
