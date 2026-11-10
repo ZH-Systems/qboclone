@@ -68,3 +68,27 @@
 .admin-panels .audit-pager{display:flex;align-items:center;justify-content:flex-end;gap:12px;padding:15px 20px;font-size:12px;color:#6c7d95}
 .admin-panels .audit-pager button{border:1px solid #d6e0ec;border-radius:8px;background:white;color:#2769c5;padding:8px 12px;font-weight:650}
 .admin-panels .audit-pager button:disabled{color:#a0aab6;cursor:not-allowed}
+
+/* Milestone 6: advanced accounting */
+.advanced-accounting{display:grid;gap:18px}
+.advanced-tabs{display:flex;gap:7px;align-items:center;flex-wrap:wrap;padding:5px;background:#edf3fa;border-radius:12px}
+.advanced-tabs button{padding:10px 15px;border:0;border-radius:9px;background:transparent;color:#426180;font-size:12px;font-weight:700;cursor:pointer}
+.advanced-tabs button.selected{background:white;color:#1f62b2;box-shadow:0 1px 5px #17385e13}
+.advanced-accounting .workspace-form{padding:24px;display:grid;gap:17px}
+.advanced-accounting .workspace-fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:13px}
+.advanced-accounting .workspace-fields label,.advanced-journal-row label{display:flex;flex-direction:column;gap:8px;font-size:12px;color:#3b5374;font-weight:700;min-width:0}
+.advanced-accounting input,.advanced-accounting select{width:100%;min-width:0}
+.advanced-accounting .table-wrap{overflow-x:auto;max-height:600px;overflow-y:auto}
+.advanced-accounting td{font-variant-numeric:tabular-nums}
+.advanced-accounting tr:last-child{background:#f6f9fe}
+.advanced-note{border:1px solid #efdba8;background:#fff9e9;padding:12px;border-radius:9px;font-size:12px;color:#725d2a}
+.advanced-journal-row{display:grid;grid-template-columns:2fr 1fr 1fr;gap:12px}
+.advanced-accounting .workspace-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px}
+@media(max-width:750px){.advanced-tabs{display:grid;grid-template-columns:1fr 1fr}.advanced-accounting .workspace-fields{grid-template-columns:1fr}.advanced-journal-row{grid-template-columns:1fr 1fr}.advanced-journal-row label:first-child{grid-column:1/-1}}
+
+.advanced-extras{display:grid;gap:20px}
+.advanced-inline-form{padding:20px 0;border-top:1px solid #e1e9f2;display:grid;gap:12px}
+.advanced-inline-form h3{font-size:14px;color:#243f65;margin:0}
+.advanced-extras>.workspace-form{display:grid;gap:20px}
+.advanced-extras .workspace-toolbar{display:flex;align-items:center;justify-content:space-between}
+@media(max-width:800px){.advanced-inline-form .workspace-fields{grid-template-columns:1fr}}

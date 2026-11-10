@@ -77,6 +77,14 @@ The latest development milestone adds server-enforced bank import quotas, Resend
 
 The production deployment requires configured Supabase Auth, Resend and Stripe test-mode integrations. CI validates PostgreSQL and application code but does not substitute for an actual Supabase/Stripe/Resend integration test or regulatory review.
 
+## Milestone 6: Advanced accounting and Canadian GST/HST
+
+Milestone 6 implements a protected year-end close with retained earnings, audited adjusting journals, one-time opening balance import, allocated payment refunds, customer deposits and applications, receivable write-offs, historical P&L and balance-sheet reporting, AR/AP aging, and user-selected province-based GST/HST rate lookup.
+
+See [Milestone 6 accounting design and test requirements](docs/MILESTONE_6.md).
+
+**Not a certified tax solution:** PST/QST, full place-of-supply rules, GST/HST filing, qualified ITC determinations, and formal financial statement certification require additional implementation and professional review.
+
 ## Scope for next phase
 
 - Financial reporting over complete journals
