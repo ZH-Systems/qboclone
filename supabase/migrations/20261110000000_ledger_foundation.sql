@@ -146,7 +146,7 @@ create function public.post_journal(
 ) returns uuid
 language plpgsql security definer set search_path = ''
 as $$
-declare v_id uuid; v_line jsonb; v_debit numeric(20,2); v_credit numeric(20,2);
+declare v_id uuid; v_line jsonb; v_debit numeric; v_credit numeric;
         v_debits numeric(20,2) := 0; v_credits numeric(20,2) := 0;
         v_account uuid; v_count integer := 0; v_period uuid;
 begin
