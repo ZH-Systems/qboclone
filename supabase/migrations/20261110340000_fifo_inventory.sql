@@ -16,6 +16,7 @@ create table public.inventory_products(
 );
 create table public.inventory_receipts(
  id uuid primary key default gen_random_uuid(),
+ receipt_sequence bigint generated always as identity,
  organization_id uuid not null,
  product_id uuid not null,
  bill_line_id uuid not null,
