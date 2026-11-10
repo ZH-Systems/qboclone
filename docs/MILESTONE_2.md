@@ -37,6 +37,10 @@ Do not reapply Phase 1 if already present. Migrations 2 and 3 are not designed t
 
 **Tax treatment limitation:** tax basis points are manually supplied by a user. Automatically assuming ITC eligibility is not legally sufficient. There is no tax-code library, place-of-supply logic, filing, province-specific assessment, or validated GST/HST engine. Do not claim regulatory compliance.
 
+## Automated test artifacts
+- `apps/web/src/AccountingWorkspace.test.ts`: document amount and input validation tests (run with `npm run test`).
+- `supabase/tests/milestone2_regression.sql`: rollback-safe database regression script for a disposable Supabase development environment. Run with a privileged SQL test connection after migrations 1-3. Covers idempotency, balanced journals, partial payments, credits, period locks and cross-tenant denial. **Not executed during authoring.**
+
 ## Required QA scenarios
 
 ### Tenant boundaries
