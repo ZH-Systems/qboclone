@@ -78,7 +78,8 @@ create function public.record_migration_reconciliation(
  p_org uuid,p_batch uuid,p_control text,p_source numeric,p_target numeric,
  p_source_report uuid,p_notes text
 ) returns void language plpgsql security definer set search_path=''
-as $$
+as $
+declare v_actual numeric(20,2);v_as_of date;v_expected_report text;
 begin
  if not exists(select 1 from public.organization_members
   where organization_id=p_org and user_id=auth.uid() and role in ('owner','accountant'))
@@ -92,7 +93,38 @@ begin
  if not exists(select 1 from public.migration_batches where organization_id=p_org
   and id=p_batch and state in ('in_progress','completed') and financial_cutover_approved_at is null)
  then raise exception 'Migration must have a reviewed cutover in progress';end if;
- if p_source_report is not null and not exists(
+ select source_as_of into v_as_of from public.migration_batches
+ where organization_id=p_org and id=p_batch;
+ if v_as_of is null then raise exception 'Source as-of date is required for reconciliation';end if;
+ v_expected_report:=case p_control
+  when 'trial_balance' then 'TrialBalance'
+  when 'accounts_receivable' then 'AgedReceivables'
+  when 'accounts_payable' then 'AgedPayables'
+  when 'bank_cash' then 'BalanceSheet'
+  when 'gst_hst' then 'BalanceSheet'
+  when 'historic_profit_loss' then 'ProfitAndLoss' end;
+ if p_source_report is null or not exists(select 1 from public.migration_source_reports r
+  where r.id=p_source_report and r.organization_id=p_org and r.batch_id=p_batch
+   and r.report_type=v_expected_report and r.period_end=v_as_of)
+ then raise exception 'An as-of QuickBooks source report for this control is required';end if;
+ if p_control='historic_profit_loss' then
+  select coalesce(sum(case when account_type='revenue' then amount else -amount end),0)
+    into v_actual from public.ledger_profit_loss(p_org,make_date(extract(year from v_as_of)::int,1,1),v_as_of);
+ else
+  select coalesce(sum(case
+   when p_control='trial_balance' then greatest(0,net_debit)
+   when p_control='accounts_receivable' and account_code='1100' then net_debit
+   when p_control='accounts_payable' and account_code='2000' then -net_debit
+   when p_control='bank_cash' and account_code in (
+     select code from public.accounts where organization_id=p_org and is_bank_account) then net_debit
+   when p_control='gst_hst' and account_code='2100' then -net_debit
+   when p_control='gst_hst' and account_code='1300' then -net_debit
+   else 0 end),0) into v_actual
+  from public.ledger_trial_balance(p_org,v_as_of);
+ end if;
+ if abs(v_actual-p_target)>0.01 then
+  raise exception 'Submitted target ledger amount does not match PostgreSQL-derived balance (actual %)',v_actual;end if;
+  if p_source_report is not null and not exists(
   select 1 from public.migration_source_reports where id=p_source_report
    and organization_id=p_org and batch_id=p_batch) then
  raise exception 'Source report belongs to a different batch';end if;
