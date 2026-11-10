@@ -105,42 +105,6 @@ begin
  return v_id;
 end $$;
 
-create function public.import_qbo_inventory_products(p_org uuid,p_batch uuid,p_limit integer default 100)
-returns jsonb language plpgsql security definer set search_path=''
-as $$
-declare v_row public.migration_records%rowtype;v_product uuid;
- v_sku text;v_name text;v_count integer:=0;
-begin
- if not exists(select 1 from public.organization_members where organization_id=p_org
- and user_id=auth.uid() and role in ('owner','accountant'))
- then raise exception 'Only owner/accountant may map QBO inventory';end if;
- if p_limit is null or p_limit not between 1 and 250 then raise exception 'Invalid import batch limit';end if;
- perform 1 from public.organizations where id=p_org for update;
- if not exists(select 1 from public.migration_batches where organization_id=p_org
-  and id=p_batch and approved_at is not null and state in ('in_progress','completed'))
- then raise exception 'Source migration must be approved';end if;
- for v_row in select * from public.migration_records where organization_id=p_org
-   and batch_id=p_batch and record_kind='inventory_item' and status='staged'
-   and payload->'raw'->>'Type'='Inventory'
-   order by created_at,id limit p_limit loop
-  v_sku:=nullif(trim(coalesce(v_row.payload->'raw'->>'Sku','')),'');
-  if v_sku is null or v_sku !~ '^[A-Za-z0-9][A-Za-z0-9._-]{0,79}$' then
-   v_sku:='QBO-'||left(regexp_replace(v_row.source_id,'[^A-Za-z0-9]','','g'),60);
-  end if;
-  v_name:=left(trim(coalesce(v_row.payload->'raw'->>'Name','')),180);
-  if length(v_name)<2 then raise exception 'Source inventory product name is invalid';end if;
-  if exists(select 1 from public.inventory_products where organization_id=p_org and sku=upper(v_sku))
-  then raise exception 'Review duplicate inventory SKU % before importing',v_sku;end if;
-  v_product:=public.create_inventory_product(p_org,v_sku,v_name);
-  update public.migration_records set status='imported',target_id=v_product
-   where organization_id=p_org and id=v_row.id;
-  v_count:=v_count+1;
- end loop;
- perform private.write_audit(p_org,'migration.inventory_products_created','migration',p_batch,
-  jsonb_build_object('imported',v_count,'inventory_asset_double_posted',false));
- return jsonb_build_object('mapped_products',v_count,'opening_stock_posted',false);
-end $$;
-
 -- The source opening journal must also be protected from manual reversal.
 create or replace function public.reverse_manual_journal(
  p_organization_id uuid,p_journal_id uuid,p_reversal_date date,p_reason text
@@ -168,7 +132,5 @@ begin
  return public.reverse_manual_journal_legacy(p_organization_id,p_journal_id,p_reversal_date,p_reason);
 end $$;
 
-revoke all on function public.register_inventory_opening_lots(uuid,date,jsonb,uuid),
- public.import_qbo_inventory_products(uuid,uuid,integer) from public,anon;
-grant execute on function public.register_inventory_opening_lots(uuid,date,jsonb,uuid),
- public.import_qbo_inventory_products(uuid,uuid,integer) to authenticated;
+revoke all on function public.register_inventory_opening_lots(uuid,date,jsonb,uuid) from public,anon;
+grant execute on function public.register_inventory_opening_lots(uuid,date,jsonb,uuid) to authenticated;
