@@ -91,6 +91,17 @@ The development branch adds recurring invoice/bill draft generation, opt-in over
 
 **Provider setup is external:** Resend, Google Cloud Vision, private Supabase Storage and GitHub Actions worker secrets must be configured. No live bank-feed provider is connected, and no production data was processed.
 
+## Milestone 8: Bank feeds, QuickBooks migration and release acceptance
+
+- **Plaid bank feeds:** authorized Canadian bank connections, encrypted provider tokens, incremental transaction staging, explicit CAD account mapping and manual promotion to reconciliation.
+- **QuickBooks Online extraction:** Intuit OAuth2 authorization and paginated source entity archival, mapped accounts/contacts, reviewed invoice/bill drafts and payment allocations.
+- **Accountant cutover:** six documented reconciliations against PostgreSQL-derived target balances and preserved source report evidence.
+- **Commercial readiness:** a separate manually invoked, protected-environment acceptance workflow requiring security, financial, provider, backup and privacy attestations.
+
+Review [Milestone 8 implementation and launch blockers](docs/MILESTONE_8.md).
+
+**Source archival is not complete semantic accounting conversion.** Unsupported credits, payroll, inventory, historical journal treatment, attachments and special taxes require further mapping and verification. No production bank connections or commercial launch are authorized by the CI suite alone.
+
 ## Scope for next phase
 
 - Financial reporting over complete journals
