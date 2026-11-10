@@ -152,8 +152,8 @@ begin
   where organization_id=p_org and batch_id=p_batch and abs(difference)<=0.01
    and source_report_id is not null;
  select count(*) into v_pending from public.migration_records
-  where organization_id=p_org and batch_id=p_batch and record_kind in
-  ('invoice','bill','payment','bill_payment')
+  where organization_id=p_org and batch_id=p_batch and (record_kind in ('invoice','bill','payment','bill_payment','credit_note','vendor_credit')
+   or (record_kind='journal' and coalesce((payload->>'post_as_standalone')::boolean,false)))
   and not financial_posted;
  if v_count<>6 or v_pending<>0 then
   raise exception 'Financial cutover blocked: six evidenced reconciliations and posted open items required';end if;
