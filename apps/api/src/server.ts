@@ -16,7 +16,7 @@ import {registerQboRoutes} from './qboRoutes.js'
 import {registerPlatformAdminRoutes} from './platformAdminRoutes.js'
 import {requireOwner,resolvePrice,subscriptionOrganization,subscriptionPrice,paymentStatus,subscriptionPeriodEnd} from './billing.js'
 const config=readConfig()
-const stripe=new Stripe(config.stripeKey)
+const stripe=config.stripeEnabled ? new Stripe(config.stripeKey!) : null
 const db=createClient(config.supabaseUrl,config.serviceRoleKey,{auth:{persistSession:false,autoRefreshToken:false}})
 const app=Fastify({
  rewriteUrl:(req)=>normalizeApiPath(req.url||'/',Boolean(process.env.VERCEL)),
@@ -133,6 +133,7 @@ app.post('/organizations/export',{config:{rateLimit:{max:2,timeWindow:'1 hour'}}
 })
 
 app.post('/billing/checkout',async(req,reply)=>{
+  if(!stripe)return reply.code(503).send({error:'Stripe Billing is disabled'})
   try{
     const user=await userFromBearer(req.headers.authorization)
     const input=jsonInput(req.body),org=input.organizationId,plan=input.planCode
@@ -163,6 +164,7 @@ app.post('/billing/checkout',async(req,reply)=>{
   }catch(e){return routeError(reply,e)}
 })
 app.post('/billing/portal',async(req,reply)=>{
+  if(!stripe)return reply.code(503).send({error:'Stripe Billing is disabled'})
   try{
     const user=await userFromBearer(req.headers.authorization)
     const {organizationId:org}=jsonInput(req.body)
@@ -177,6 +179,7 @@ app.post('/billing/portal',async(req,reply)=>{
   }catch(e){return routeError(reply,e)}
 })
 app.post('/stripe/webhook',{config:{rawBody:true}},async(req,reply)=>{
+  if(!stripe||!config.webhookSecret)return reply.code(503).send({error:'Stripe Billing is disabled'})
   const signature=req.headers['stripe-signature']
   if(typeof signature!=='string'||!Buffer.isBuffer(req.body))return reply.code(400).send({error:'Raw signed request required'})
   let event:Stripe.Event

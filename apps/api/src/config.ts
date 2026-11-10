@@ -1,6 +1,6 @@
 export type ServerConfig={
-  supabaseUrl:string; serviceRoleKey:string; stripeKey:string;
-  webhookSecret:string; webOrigin:string; port:number;
+  supabaseUrl:string; serviceRoleKey:string; stripeEnabled:boolean; stripeKey:string|null;
+  webhookSecret:string|null; webOrigin:string; port:number;
   emailApiKey:string|null; emailFrom:string|null;
   trustedProxyCidrs:string[]|false;
   googleVisionApiKey:string|null; workerSecret:string|null;
@@ -26,13 +26,20 @@ export function readConfig(env:NodeJS.ProcessEnv=process.env):ServerConfig{
   const parsedSupabase=new URL(supabaseUrl)
   if(parsedSupabase.origin!==supabaseUrl||!['https:','http:'].includes(parsedSupabase.protocol))
     throw new Error('SUPABASE_URL must be an origin without path')
+  const stripeSetting=env.STRIPE_ENABLED?.trim().toLowerCase()||'false'
+  if(!['true','false'].includes(stripeSetting))throw new Error('STRIPE_ENABLED must be true or false')
+  const stripeEnabled=stripeSetting==='true'
+  const stripeKey=stripeEnabled?required('STRIPE_SECRET_KEY'):null
+  const webhookSecret=stripeEnabled?required('STRIPE_WEBHOOK_SECRET'):null
+  if(stripeEnabled&&!/^sk_(test|live)_/.test(stripeKey!))
+    throw new Error('Enabled Stripe requires a valid Stripe secret key')
+  if(stripeEnabled&&!/^whsec_/.test(webhookSecret!))
+    throw new Error('Enabled Stripe requires a valid webhook signature secret')
   const production=deploymentEnv==='production'
   if(production){
     if(parsedSupabase.protocol!=='https:')throw new Error('Production Supabase must use HTTPS')
-    if(!/^sk_live_/.test(required('STRIPE_SECRET_KEY')))
+    if(stripeEnabled&&!/^sk_live_/.test(stripeKey!))
       throw new Error('Production requires a live Stripe key')
-    if(!/^whsec_/.test(required('STRIPE_WEBHOOK_SECRET')))
-      throw new Error('Production requires a Stripe webhook signature secret')
     if(!env.TRUSTED_PROXY_CIDRS?.trim())
       throw new Error('Production must set TRUSTED_PROXY_CIDRS')
     if(!env.AUTOMATION_WORKER_SECRET||Buffer.byteLength(env.AUTOMATION_WORKER_SECRET,'utf8')<32)
@@ -51,7 +58,7 @@ export function readConfig(env:NodeJS.ProcessEnv=process.env):ServerConfig{
     }
   }
   return {deploymentEnv:deploymentEnv as ServerConfig['deploymentEnv'],supabaseUrl,serviceRoleKey:required('SUPABASE_SERVICE_ROLE_KEY'),
-    stripeKey:required('STRIPE_SECRET_KEY'),webhookSecret:required('STRIPE_WEBHOOK_SECRET'),
+    stripeEnabled,stripeKey,webhookSecret,
     webOrigin:origin,port,
     emailApiKey:env.RESEND_API_KEY?.trim()||null,emailFrom:env.INVITATION_EMAIL_FROM?.trim()||null,
     trustedProxyCidrs:env.TRUSTED_PROXY_CIDRS?.trim()?.split(',').map(x=>x.trim()).filter(Boolean)||false,

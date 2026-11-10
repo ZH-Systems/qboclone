@@ -152,3 +152,7 @@ Milestone 10 establishes deployment packaging, fail-closed production configurat
 ## Developer note
 
 PostgreSQL database functions form the write boundary for ledger operations. Review every schema migration before deployment. Posted journals are not directly writable by regular authenticated users; elevated DB administration remains a separate trust boundary.
+
+### Optional Stripe Billing
+
+`STRIPE_ENABLED` defaults to `false`. Stripe API keys and webhook secrets are not required to start the Fastify API, platform administration or accounting when billing is disabled. All Stripe routes return HTTP 503 until `STRIPE_ENABLED=true` is configured with both secrets. In production, enabled Stripe requires live credentials. `WEB_APP_ORIGIN`, `SUPABASE_URL`, and `SUPABASE_SERVICE_ROLE_KEY` remain required server-side settings. See [Vercel Services setup](docs/VERCEL_SERVICES.md).
