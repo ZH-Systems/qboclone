@@ -4,7 +4,7 @@
 
 **1. FIFO perpetual inventory.** Stock products and unique SKUs are tenant-scoped. Posted supplier bill lines can be received into a tracked FIFO cost lot. Receipt reclassifies the bill line's net-of-recoverable-tax expense as Inventory Asset. A posted customer invoice line can issue inventory against the oldest available lots, debiting Cost of Goods Sold and crediting Inventory Asset. Both operations require an explicit action, create a balanced journal, and write source-linked audit records. The system prevents duplicate receipt/issue per document line, rejects insufficient stock and protects these source journals from manual reversal.
 
-Inventory limitations: single CAD valuation currency, positive cost lots only, no negative inventory, no bundles/kits, serials, cycle counts, inventory shrinkage, inventory returns, landed costs, valuation method changes, or automated QBO stock valuation. Inventory receipt on a bill must not be interpreted as a goods-receipt workflow independent of billing.
+Inventory limitations: opening lot registration is only available against a previously imported one-time opening balance journal; single CAD valuation currency, positive cost lots only, no negative inventory, no bundles/kits, serials, cycle counts, inventory shrinkage, inventory returns, landed costs, valuation method changes, or automated QBO stock valuation. Inventory receipt on a bill must not be interpreted as a goods-receipt workflow independent of billing.
 
 **2. Vendor advances.** Supplier prepayments are recorded as a Supplier Advances asset until applied against the payable on a posted vendor bill. Unused advances can be refunded. The database enforces the vendor relationship, remaining balance and source journal integrity.
 
