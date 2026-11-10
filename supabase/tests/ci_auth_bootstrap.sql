@@ -20,3 +20,6 @@ create function auth.uid() returns uuid
 as $$
  select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid
 $$;
+
+grant usage on schema auth to authenticated;
+grant execute on function auth.uid() to authenticated;
