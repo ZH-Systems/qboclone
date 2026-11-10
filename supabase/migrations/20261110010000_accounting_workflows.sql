@@ -3,6 +3,86 @@
 -- DEV/QA ONLY until an accounting professional validates the accounting policy and tax treatment.
 -- CAUTION: tax rates are manually entered estimates. This is NOT a CRA tax engine.
 
+-- Separate system posting namespaces from caller-controlled manual journal keys.
+alter table public.journal_entries add column source_kind text not null default 'manual'
+  check(source_kind in ('manual','document','payment','reversal'));
+alter table public.journal_entries drop constraint journal_entries_organization_id_idempotency_key_key;
+alter table public.journal_entries add constraint journal_entries_tenant_source_idempotency_key
+  unique(organization_id,source_kind,idempotency_key);
+create schema if not exists private;
+revoke all on schema private from public, anon, authenticated;
+
+create function private.post_accounting_journal_internal(
+  p_source_kind text,
+  p_organization_id uuid,
+  p_entry_date date,
+  p_memo text,
+  p_reference text,
+  p_idempotency_key uuid,
+  p_lines jsonb
+) returns uuid
+language plpgsql security definer set search_path = ''
+as $
+declare v_id uuid; v_line jsonb; v_debit numeric; v_credit numeric;
+        v_debits numeric(20,2) := 0; v_credits numeric(20,2) := 0;
+        v_account uuid; v_count integer := 0; v_period uuid;
+begin
+  if p_source_kind not in ('manual','document','payment','reversal') then raise exception 'Invalid posting origin'; end if;
+  if not public.has_org_write(p_organization_id) then raise exception 'Not authorized to post'; end if;
+  if p_entry_date is null or p_memo is null or char_length(trim(p_memo)) not between 3 and 500 then raise exception 'Invalid journal header'; end if;
+  if p_idempotency_key is null then raise exception 'Idempotency key is required'; end if;
+  if jsonb_typeof(p_lines) is distinct from 'array' or jsonb_array_length(p_lines) not between 2 and 100 then raise exception 'Journal must contain 2 to 100 lines'; end if;
+  -- Lock the organization to serialize same-tenant posting and period changes.
+  perform 1 from public.organizations where id=p_organization_id for update;
+  select id into v_id from public.journal_entries where organization_id=p_organization_id and source_kind=p_source_kind and idempotency_key=p_idempotency_key;
+  if found then return v_id; end if;
+  select id into v_period from public.fiscal_periods
+    where organization_id=p_organization_id and p_entry_date between start_date and end_date and not is_locked
+    for update;
+  if v_period is null then raise exception 'Accounting period is closed or missing'; end if;
+  for v_line in select value from jsonb_array_elements(p_lines)
+  loop
+    if (v_line->>'account_id') is null then raise exception 'Account ID missing'; end if;
+    v_account := (v_line->>'account_id')::uuid;
+    if not exists(select 1 from public.accounts where organization_id=p_organization_id and id=v_account and is_active) then
+      raise exception 'Account not found or inactive';
+    end if;
+    v_debit := (v_line->>'debit')::numeric;
+    v_credit := (v_line->>'credit')::numeric;
+    if v_debit is null or v_credit is null or v_debit < 0 or v_credit < 0
+       or (v_debit > 0) = (v_credit > 0)
+       or round(v_debit,2) <> v_debit or round(v_credit,2) <> v_credit then
+      raise exception 'Each line requires exactly one positive debit or credit with cent precision';
+    end if;
+    v_debits := v_debits + v_debit;
+    v_credits := v_credits + v_credit;
+    v_count := v_count + 1;
+  end loop;
+  if v_count < 2 or v_debits <= 0 or v_debits <> v_credits then raise exception 'Journal must balance'; end if;
+  insert into public.journal_entries(organization_id,entry_date,memo,reference,idempotency_key,source_kind,created_by)
+    values(p_organization_id,p_entry_date,trim(p_memo),nullif(trim(p_reference),''),p_idempotency_key,p_source_kind,auth.uid())
+    returning id into v_id;
+  for v_line in select value from jsonb_array_elements(p_lines)
+  loop
+    insert into public.journal_lines(organization_id,journal_entry_id,account_id,debit,credit)
+    values(p_organization_id,v_id,(v_line->>'account_id')::uuid,(v_line->>'debit')::numeric,(v_line->>'credit')::numeric);
+  end loop;
+  return v_id;
+end $;
+
+revoke all on function private.post_accounting_journal_internal(text,uuid,date,text,text,uuid,jsonb)
+  from public,anon,authenticated;
+
+-- Public RPC can only create manual-origin journals.
+create or replace function public.post_journal(
+  p_organization_id uuid,p_entry_date date,p_memo text,p_reference text,
+  p_idempotency_key uuid,p_lines jsonb
+) returns uuid language sql security definer set search_path=''
+as $
+  select private.post_accounting_journal_internal(
+    'manual',p_organization_id,p_entry_date,p_memo,p_reference,p_idempotency_key,p_lines);
+$;
+
 alter table public.organizations add column if not exists document_sequence bigint not null default 0;
 insert into public.accounts(organization_id,code,name,account_type,normal_balance)
 select o.id,'1300','Sales Tax Recoverable','asset','debit'
@@ -283,8 +363,8 @@ begin
     if d.tax_total>0 then v_lines:=v_lines||jsonb_build_array(jsonb_build_object('account_id',v_tax,'debit',0,'credit',d.tax_total)); end if;
   end if;
   -- Both journal and source document are posted in one database transaction.
-  v_journal:=public.post_journal(p_organization_id,d.issue_date,
-    d.document_number||' '||coalesce(nullif(d.memo,''),d.document_type),
+  v_journal:=private.post_accounting_journal_internal('document',p_organization_id,d.issue_date,
+    left(d.document_number||' '||coalesce(nullif(d.memo,''),d.document_type),500),
     d.document_number,d.id,v_lines);
   update public.financial_documents
   set journal_entry_id=v_journal,status='posted',posted_at=now()
@@ -325,7 +405,7 @@ begin
       jsonb_build_object('account_id',v_ar,'debit',p_amount,'credit',0),
       jsonb_build_object('account_id',v_bank,'debit',0,'credit',p_amount));
   end if;
-  v_journal:=public.post_journal(p_organization_id,p_payment_date,
+  v_journal:=private.post_accounting_journal_internal('payment',p_organization_id,p_payment_date,
     'Payment '||d.document_number,
     left(coalesce(p_reference,'Payment'),80),p_idempotency_key,v_lines);
   insert into public.document_payments(
@@ -358,7 +438,7 @@ begin
   if found then return v_reverse; end if;
   select jsonb_agg(jsonb_build_object('account_id',account_id,'debit',credit,'credit',debit) order by id)
   into v_lines from public.journal_lines where organization_id=p_organization_id and journal_entry_id=p_journal_id;
-  v_reverse:=public.post_journal(p_organization_id,p_reversal_date,
+  v_reverse:=private.post_accounting_journal_internal('reversal',p_organization_id,p_reversal_date,
     'Reversal: '||left(trim(p_reason),480),'REV-'||left(p_journal_id::text,32),
     p_journal_id,v_lines);
   insert into public.journal_reversals(organization_id,original_journal_id,reversing_journal_id,reason,reversed_by)
