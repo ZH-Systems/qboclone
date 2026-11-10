@@ -45,6 +45,12 @@ A follow-up milestone adds customer/vendor records, invoice and bill drafts/post
 
 Do **not** apply migration 2 or use financial data in production until the migrations, permission policies and accounting assertions have been validated in a test Supabase instance.
 
+## Milestone 3 development branch
+
+The next milestone implements tenant-defined tax codes and tax snapshots, configurable document posting accounts, draft editing/voiding, bank statement CSV staging, journal matching, and controlled reconciliation. See [the Milestone 3 documentation](docs/MILESTONE_3.md).
+
+**Do not** treat the current tax configuration as a validated CRA compliance system or use it for production filings. The new migrations and tests must run in development first.
+
 ## Scope for next phase
 
 - Financial reporting over complete journals
