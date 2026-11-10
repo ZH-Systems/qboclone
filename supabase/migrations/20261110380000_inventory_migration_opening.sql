@@ -105,6 +105,106 @@ begin
  return v_id;
 end $$;
 
+-- QBO source item mapping. Source quantities/costs remain review evidence and
+-- are not posted until a separate opening-asset valuation is reconciled.
+create table public.migration_inventory_items(
+ organization_id uuid not null,
+ batch_id uuid not null,
+ source_item_id text not null,
+ product_id uuid not null,
+ source_quantity numeric(20,3),
+ source_unit_cost numeric(20,2),
+ created_at timestamptz not null default now(),
+ primary key(organization_id,batch_id,source_item_id),
+ unique(organization_id,batch_id,product_id),
+ foreign key(organization_id,batch_id) references public.migration_batches(organization_id,id),
+ foreign key(organization_id,product_id) references public.inventory_products(organization_id,id)
+);
+alter table public.migration_inventory_items enable row level security;
+create policy migration_inventory_items_read on public.migration_inventory_items
+ for select to authenticated using(public.has_org_access(organization_id));
+revoke all on public.migration_inventory_items from public,anon,authenticated;
+grant select on public.migration_inventory_items to authenticated;
+
+create function public.import_qbo_inventory_products(p_org uuid,p_batch uuid,p_limit integer default 100)
+returns jsonb language plpgsql security definer set search_path=''
+as $
+declare v_row public.migration_records%rowtype;v_product uuid;v_sku text;v_name text;
+ v_raw jsonb;v_type text;v_qty numeric;v_unit_cost numeric;v_count integer:=0;
+begin
+ if not exists(select 1 from public.organization_members where organization_id=p_org
+ and user_id=auth.uid() and role in ('owner','accountant'))
+ then raise exception 'Owner or accountant approval required for SKU import';end if;
+ if p_limit is null or p_limit not between 1 and 250 then raise exception 'Invalid product import limit';end if;
+ perform 1 from public.organizations where id=p_org for update;
+ if not exists(select 1 from public.migration_batches where organization_id=p_org
+ and id=p_batch and state in ('in_progress','completed') and approved_at is not null)
+ then raise exception 'Approved source migration required';end if;
+ for v_row in select * from public.migration_records
+ where organization_id=p_org and batch_id=p_batch and record_kind='inventory_item'
+  and status='staged' order by created_at,id limit p_limit loop
+  v_raw:=v_row.payload->'raw';
+  v_type:=coalesce(v_row.payload->>'item_type',v_raw->>'Type');
+  if v_type is distinct from 'Inventory' then continue;end if;
+  v_name:=trim(coalesce(v_row.payload->>'name',v_raw->>'Name',''));
+  v_sku:=trim(coalesce(nullif(v_row.payload->>'sku',''),nullif(v_raw->>'Sku',''),v_raw->>'Name',''));
+  if length(v_name) not between 2 and 180 then raise exception 'QBO inventory item % missing name',v_row.source_id;end if;
+  if v_sku !~ '^[A-Za-z0-9][A-Za-z0-9._-]{0,79}
+create or replace function public.reverse_manual_journal(
+ p_organization_id uuid,p_journal_id uuid,p_reversal_date date,p_reason text
+) returns uuid language plpgsql security definer set search_path=''
+as $$
+begin
+ if not public.has_org_write(p_organization_id) then raise exception 'Not authorized';end if;
+ perform 1 from public.organizations where id=p_organization_id for update;
+ if exists(select 1 from public.opening_balance_imports where organization_id=p_organization_id and journal_entry_id=p_journal_id)
+ or exists(select 1 from public.year_end_closures where organization_id=p_organization_id and closing_journal_id=p_journal_id)
+ or exists(select 1 from public.payment_refunds where organization_id=p_organization_id and journal_entry_id=p_journal_id)
+ or exists(select 1 from public.document_writeoffs where organization_id=p_organization_id and journal_entry_id=p_journal_id)
+ or exists(select 1 from public.customer_deposits where organization_id=p_organization_id and journal_entry_id=p_journal_id)
+ or exists(select 1 from public.deposit_applications where organization_id=p_organization_id and journal_entry_id=p_journal_id)
+ or exists(select 1 from public.deposit_refunds where organization_id=p_organization_id and journal_entry_id=p_journal_id)
+ or exists(select 1 from public.vendor_advances where organization_id=p_organization_id and journal_entry_id=p_journal_id)
+ or exists(select 1 from public.vendor_advance_applications where organization_id=p_organization_id and journal_entry_id=p_journal_id)
+ or exists(select 1 from public.vendor_advance_refunds where organization_id=p_organization_id and journal_entry_id=p_journal_id)
+ or exists(select 1 from public.inventory_receipts where organization_id=p_organization_id and journal_entry_id=p_journal_id)
+ or exists(select 1 from public.inventory_issues where organization_id=p_organization_id and journal_entry_id=p_journal_id)
+ or exists(select 1 from public.foreign_document_payments fx
+   join public.document_payments p on p.organization_id=fx.organization_id and p.id=fx.payment_id
+   where fx.organization_id=p_organization_id and p.journal_entry_id=p_journal_id)
+ then raise exception 'Source accounting journal cannot be manually reversed';end if;
+ return public.reverse_manual_journal_legacy(p_organization_id,p_journal_id,p_reversal_date,p_reason);
+end $$;
+
+revoke all on function public.register_inventory_opening_lots(uuid,date,jsonb,uuid),
+ public.import_qbo_inventory_products(uuid,uuid,integer) from public,anon;
+grant execute on function public.register_inventory_opening_lots(uuid,date,jsonb,uuid),
+ public.import_qbo_inventory_products(uuid,uuid,integer) to authenticated;
+ then
+   v_sku:='QBO-'||left(regexp_replace(v_row.source_id,'[^A-Za-z0-9]','','g'),60);
+  end if;
+  v_sku:=upper(v_sku);
+  if exists(select 1 from public.inventory_products where organization_id=p_org and sku=v_sku)
+  then raise exception 'QBO source SKU % already exists, review mapping manually',v_sku;end if;
+  v_qty:=nullif(coalesce(v_row.payload->>'quantity_on_hand',v_raw->>'QtyOnHand'),'')::numeric;
+  v_unit_cost:=nullif(coalesce(v_row.payload->>'unit_cost',v_raw->>'PurchaseCost'),'')::numeric;
+  if (v_qty is not null and (v_qty<0 or scale(v_qty)>3)) or
+    (v_unit_cost is not null and (v_unit_cost<0 or scale(v_unit_cost)>2))
+  then raise exception 'QBO inventory item % has unsupported source quantities/cost',v_row.source_id;end if;
+  v_product:=public.create_inventory_product(p_org,v_sku,v_name);
+  insert into public.migration_inventory_items(organization_id,batch_id,source_item_id,
+   product_id,source_quantity,source_unit_cost)
+  values(p_org,p_batch,v_row.source_id,v_product,v_qty,v_unit_cost);
+  update public.migration_records set status='imported',target_id=v_product
+   where organization_id=p_org and id=v_row.id;
+  v_count:=v_count+1;
+ end loop;
+ perform private.write_audit(p_org,'migration.inventory_skus_mapped','migration',p_batch,
+ jsonb_build_object('mapped_products',v_count,'stock_value_posted',false));
+ return jsonb_build_object('mapped_products',v_count,'stock_value_posted',false,
+  'requires_source_valuation_review',true);
+end $;
+
 -- The source opening journal must also be protected from manual reversal.
 create or replace function public.reverse_manual_journal(
  p_organization_id uuid,p_journal_id uuid,p_reversal_date date,p_reason text
