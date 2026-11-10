@@ -21,7 +21,8 @@ create table public.migration_records(
  batch_id uuid not null,
  record_kind text not null check(record_kind in (
  'account','customer','vendor','tax_code','invoice','bill','credit_note','vendor_credit',
- 'payment','bill_payment','journal','opening_balance','attachment','bank_transaction')),
+ 'payment','bill_payment','journal','opening_balance','attachment','bank_transaction',
+ 'inventory_item','purchase','deposit','sales_receipt','refund_receipt','transfer','estimate','purchase_order')),
  source_id text not null check(length(source_id) between 1 and 200),
  payload jsonb not null check(jsonb_typeof(payload)='object'),
  status text not null default 'staged' check(status in ('staged','imported','exception','archived')),
@@ -79,7 +80,8 @@ begin
   user_id=auth.uid() and role in ('owner','administrator','accountant'))
  then raise exception 'Not authorized';end if;
  if p_kind not in ('account','customer','vendor','tax_code','invoice','bill','credit_note',
-  'vendor_credit','payment','bill_payment','journal','opening_balance','attachment','bank_transaction')
+  'vendor_credit','payment','bill_payment','journal','opening_balance','attachment','bank_transaction',
+ 'inventory_item','purchase','deposit','sales_receipt','refund_receipt','transfer','estimate','purchase_order')
  or jsonb_typeof(p_records) is distinct from 'array' or jsonb_array_length(p_records)>500
  then raise exception 'Invalid migration entity batch';end if;
  perform 1 from public.organizations where id=p_org for update;
