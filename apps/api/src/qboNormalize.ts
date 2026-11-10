@@ -76,8 +76,16 @@ export function normalizeQbo(type:QboType,source:Record<string,unknown>):{
    payment_date:val(source.TxnDate),total:source.TotalAmt,allocations}}
  }
  if(type==='JournalEntry')return {kind:'journal',record:{...base,
-  date:val(source.TxnDate),lines:Array.isArray(source.Line)?source.Line:[],
-  qbo_raw_journal:true}}
+  date:val(source.TxnDate),
+  lines:(Array.isArray(source.Line)?source.Line:[]).map(item=>{
+   const line=item as Record<string,unknown>
+   const detail=(line.JournalEntryLineDetail||{}) as Record<string,unknown>
+   const account=(detail.AccountRef||{}) as Record<string,unknown>
+   const amount=Number(line.Amount||0)
+   return {account_source_id:id(account.value),
+    debit:detail.PostingType==='Debit'?amount:0,
+    credit:detail.PostingType==='Credit'?amount:0}
+  }),post_as_standalone:false,qbo_raw_journal:true}}
  if(type==='Attachable')return {kind:'attachment',record:base}
  if(['Purchase','Deposit','SalesReceipt','RefundReceipt','Transfer','Estimate','PurchaseOrder','Item'].includes(type))
   return {kind:'bank_transaction',record:{...base,archive_entity:type}}
