@@ -45,9 +45,9 @@ The invitation creation RPC returns a single-use token. The frontend creates a U
 - There is no automatic webhook retry queue except Stripe's delivery retries; monitor failed events.
 - There is no handling of failed/incomplete checkout expiry beyond the subscription status.
 - Organization owners can open Stripe Customer Portal. It must be configured with allowed actions and products in Stripe Dashboard.
-- No complete offboarding/read-only tenant shutdown, prorated usage billing, multi-organization volume billing, tax collection setup, or plan upgrade quota enforcement beyond invitations.
+- No complete offboarding/read-only tenant shutdown, production-grade data-export workflow, prorated usage billing, multi-organization volume billing, tax collection setup, or plan upgrade quota enforcement beyond invitations.
 - No automatic Canadian sales tax charging setup in Stripe Billing. Configure and legally validate tax behaviour separately before collecting subscriptions.
-- The API supplies `current_period_end` as null until the Stripe version's item-level period field is mapped and validated.
+- The API reads `current_period_end` from the subscription item where available, falling back to the legacy subscription field; otherwise it is null. Verify your Stripe API version during test-mode integration.
 
 ## Validation and production gates
 - GitHub web and API CI must pass typecheck, unit tests and production builds.
