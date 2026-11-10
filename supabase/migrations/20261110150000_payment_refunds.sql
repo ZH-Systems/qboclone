@@ -1,6 +1,9 @@
 -- Milestone 6: payment refunds and accurate receivable/payable outstanding calculations.
 -- A refund undoes an allocated payment movement. To return goods, post the
 -- corresponding credit document afterwards to offset the restored receivable.
+alter table public.document_payments add constraint document_payments_tenant_id_unique
+ unique(organization_id,id);
+
 create table public.payment_refunds(
  id uuid primary key default gen_random_uuid(),
  organization_id uuid not null references public.organizations(id) on delete restrict,
@@ -71,6 +74,7 @@ begin
  select * into p from public.document_payments where
    organization_id=p_organization_id and id=p_payment_id for update;
  if not found then raise exception 'Original payment not found';end if;
+ if p_refund_date<p.payment_date then raise exception 'Refund date cannot precede original payment';end if;
  select * into d from public.financial_documents where
    organization_id=p_organization_id and id=p.document_id for update;
  if not found or d.status<>'posted' or d.document_type not in ('invoice','bill')
