@@ -108,7 +108,34 @@ begin
  '[]'::jsonb,jsonb_build_array(jsonb_build_object('transaction_id','tx-1')));
  if not (select removed from public.bank_feed_transactions where id=v_row)
  then raise exception 'Removed feed item not tombstoned';end if;
- raise notice 'MILESTONE 8 MIGRATION AND BANK FEED REGRESSION PASSED';
+ perform public.apply_bank_feed_sync(v_conn,'cursor-3','cursor-4',
+  jsonb_build_array(jsonb_build_object('transaction_id','tx-2','account_id','plaid-account-1',
+  'amount',10,'date',current_date,'name','Purchase','pending',false)),
+  '[]'::jsonb,'[]'::jsonb);
+ select id into v_row from public.bank_feed_transactions
+  where connection_id=v_conn and provider_transaction_id='tx-2';
+ perform set_config('qa.m8_active_feed',v_row::text,false);
+  raise notice 'MILESTONE 8 MIGRATION AND BANK FEED REGRESSION PASSED';
+end $test$;
+reset role;
+set local role authenticated;
+do $test$
+declare v_org uuid:=current_setting('qa.m8_org')::uuid;
+ v_bank uuid:=current_setting('qa.m8_bank')::uuid;
+ v_feed uuid:=current_setting('qa.m8_active_feed')::uuid;
+ v_stmt uuid;v_result jsonb;v_failed boolean:=false;
+begin
+ perform set_config('request.jwt.claim.sub','88888888-8888-4888-8888-888888888881',true);
+ v_stmt:=public.create_bank_statement(v_org,v_bank,current_date,current_date,0,-10);
+ v_result:=public.promote_bank_feed_transactions(v_org,v_stmt,array[v_feed]);
+ if (v_result->>'imported')::integer<>1 then raise exception 'Feed staging bridge did not import';end if;
+ if not exists(select 1 from public.bank_feed_import_links where organization_id=v_org
+  and feed_transaction_id=v_feed) then raise exception 'Missing source feed provenance link';end if;
+ if exists(select 1 from public.bank_transactions where statement_id=v_stmt
+  and matched_journal_entry_id is not null) then raise exception 'Feed import automatically matched ledger';end if;
+ begin perform public.promote_bank_feed_transactions(v_org,v_stmt,array[v_feed]);
+ exception when others then v_failed:=true;end;
+ if not v_failed then raise exception 'Feed transaction staging not idempotent-safe';end if;
 end $test$;
 reset role;
 rollback;
