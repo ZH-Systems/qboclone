@@ -39,7 +39,7 @@ grant select on public.recurring_document_rules,public.recurring_document_runs t
 
 create function private.recurring_next_month(p_previous date,p_anchor_day integer)
 returns date language sql immutable set search_path=''
-as $
+as $rec$
  select (date_trunc('month',p_previous::timestamp)+interval '1 month'+
  (least(p_anchor_day,extract(day from (date_trunc('month',p_previous::timestamp)+interval '2 months' - interval '1 day'))::integer)-1)*interval '1 day')::date
 $;
