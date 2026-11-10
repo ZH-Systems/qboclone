@@ -10,6 +10,7 @@ Apply all earlier migrations, then the following in filename order, in a disposa
 - `20261110050000_reconciled_ledger_lock.sql`
 - `20261110060000_bank_account_types.sql`
 - `20261110070000_effective_tax_rules.sql`
+- `20261110080000_bank_import_reset.sql`
 
 Migrations are deliberately nonreplayable and should be applied once. Backup and inspect schema before any deployment. Do **not** run them on a production database without verification.
 
@@ -23,6 +24,7 @@ Migrations are deliberately nonreplayable and should be applied once. Backup and
 - Explicit bank-account eligibility flag on asset accounts.
 - CSV statement staging for date, description, signed amount and optional reference, supporting CSV quotes.
 - Idempotent repeat imports by statement and row number, with conflicting replacement rows rejected.
+- Resetting all imported rows in an **open** statement, including matches, without deleting ledger journals. Reconciled imports cannot be reset.
 - Manual bank transaction-to-existing-journal matching by signed bank account delta.
 - Reconciliation requiring matched rows, statement opening/closing arithmetic and agreement with the ledger balance.
 - Protection against backdated posting to previously reconciled bank accounts.
@@ -62,6 +64,7 @@ A statement is one account and one date range. Overlapping statement date ranges
 - Test zero-rated/exempt/out-of-scope configuration and effective dates.
 - Confirm draft modifications change totals but posted documents cannot be edited or voided.
 - Import a CSV twice without duplicating transactions; a changed prior row must be rejected.
+- Reset an open statement import and re-import it, then verify the posted ledger remains unchanged.
 - Verify bank transaction match uses the correct sign and account, and does not create journal postings.
 - Reconcile a statement, then verify it rejects unmatching and backdated journal postings.
 - Verify RLS and `SECURITY DEFINER` functions with test JWTs.
