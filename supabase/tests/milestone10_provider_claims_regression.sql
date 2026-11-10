@@ -11,10 +11,6 @@ begin
  v_org:=public.create_organization('M10 Provider Claim Security QA');
  perform set_config('qa.m10_org',v_org::text,false);
  perform set_config('qa.m10_session',v_session::text,false);
- insert into public.bank_feed_link_sessions(id,organization_id,user_id,expires_at)
- values(v_session,v_org,auth.uid(),now()+interval '10 minutes');
- insert into public.qbo_oauth_states(state_hash,organization_id,user_id,expires_at)
- values(v_state,v_org,auth.uid(),now()+interval '10 minutes');
 end $qa$;
 reset role;
 set local role service_role;
@@ -23,7 +19,12 @@ declare v_org uuid:=current_setting('qa.m10_org')::uuid;
  v_session uuid:=current_setting('qa.m10_session')::uuid;
  v_claim boolean;v_claims integer;
 begin
- v_claim:=public.claim_bank_link_session(v_session,v_org,
+ insert into public.bank_feed_link_sessions(id,organization_id,user_id,expires_at)
+ values(v_session,v_org,'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1'::uuid,now()+interval '10 minutes');
+ insert into public.qbo_oauth_states(state_hash,organization_id,user_id,expires_at)
+ values(repeat('a',64),v_org,'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1'::uuid,
+ now()+interval '10 minutes');
+  v_claim:=public.claim_bank_link_session(v_session,v_org,
   'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2'::uuid);
  if v_claim then raise exception 'Wrong user was allowed to claim bank link';end if;
  v_claim:=public.claim_bank_link_session(v_session,gen_random_uuid(),
