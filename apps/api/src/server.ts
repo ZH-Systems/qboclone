@@ -7,6 +7,7 @@ import {createHash} from 'node:crypto'
 import Stripe from 'stripe'
 import {createClient} from '@supabase/supabase-js'
 import {readConfig} from './config.js'
+import {normalizeApiPath} from './vercelRouting.js'
 import {bearerToken,requireOrganizationId,requireOrganizationRole,scopedSupabase,buildOrganizationExport} from './operations.js'
 import {sendInvitationEmail} from './email.js'
 import {registerAutomationRoutes} from './automationRoutes.js'
@@ -17,6 +18,7 @@ const config=readConfig()
 const stripe=new Stripe(config.stripeKey)
 const db=createClient(config.supabaseUrl,config.serviceRoleKey,{auth:{persistSession:false,autoRefreshToken:false}})
 const app=Fastify({
+ rewriteUrl:(req)=>normalizeApiPath(req.url||'/',Boolean(process.env.VERCEL)),
  // Intuit OAuth callbacks carry authorization codes in their query strings.
  // Suppress automatic request URL logs to avoid retaining those credentials.
  disableRequestLogging:true,
