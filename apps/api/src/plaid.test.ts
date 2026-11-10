@@ -7,7 +7,9 @@ describe('provider bank credentials',()=>{
   const b=encryptProviderToken('access-sandbox-123',key)
   expect(a).not.toEqual(b)
   expect(decryptProviderToken(a,key)).toBe('access-sandbox-123')
-  expect(()=>decryptProviderToken(a.replace(/.$/,'_'),key)).toThrow()
+  const tampered=a.split('.')
+  tampered[2]=(tampered[2][0]==='A'?'B':'A')+tampered[2].slice(1)
+  expect(()=>decryptProviderToken(tampered.join('.'),key)).toThrow()
  })
  it('rejects malformed keys and unauthenticated webhooks',()=>{
   expect(()=>encryptionKey('example')).toThrow()
