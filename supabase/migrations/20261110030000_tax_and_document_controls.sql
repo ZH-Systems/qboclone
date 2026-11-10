@@ -220,8 +220,22 @@ end $$;
 alter table public.financial_documents drop constraint financial_documents_status_check;
 alter table public.financial_documents add constraint financial_documents_status_check
  check(status in ('draft','posted','void'));
-alter table public.financial_documents drop constraint financial_documents_check;
-alter table public.financial_documents add constraint financial_documents_check
+-- Locate the original unnamed source-posting invariant by its definition.
+-- PostgreSQL can assign different auto-generated CHECK constraint names.
+do $migration$
+declare v_name text;
+begin
+ for v_name in
+   select c.conname from pg_constraint c
+   where c.conrelid='public.financial_documents'::regclass
+     and c.contype='c'
+     and pg_get_constraintdef(c.oid) ilike '%journal_entry_id%'
+     and pg_get_constraintdef(c.oid) ilike '%posted_at%'
+ loop
+   execute format('alter table public.financial_documents drop constraint %I',v_name);
+ end loop;
+end $migration$;
+alter table public.financial_documents add constraint financial_documents_posting_state_check
  check(
   (status in ('draft','void') and journal_entry_id is null and posted_at is null)
   or (status='posted' and journal_entry_id is not null and posted_at is not null)
