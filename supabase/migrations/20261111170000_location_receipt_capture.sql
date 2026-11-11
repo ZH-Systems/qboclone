@@ -110,7 +110,37 @@ begin
  insert into public.receipt_intake_reviews(organization_id,receipt_id,submitted_by,
   classification,geofence_id,merchant_candidate,total_candidate)
  values(p_org,p_receipt,auth.uid(),p_kind,p_geofence,left(v_vendor,150),
-  case when v_total ~ '^[0-9]{1,15}(\\.[0-9]{2})$' then v_total::numeric else null end)
+  case when v_total ~ '^[0-9]{1,15}([.][0-9]{2}) then v_total::numeric else null end)
+ on conflict(organization_id,receipt_id) do nothing returning id into v_id;
+ if v_id is null then
+  select id into v_id from public.receipt_intake_reviews
+   where organization_id=p_org and receipt_id=p_receipt;
+ end if;
+ perform private.write_audit(p_org,'receipt.intake_submitted','receipt',p_receipt,
+  jsonb_build_object('classification',p_kind,'review_id',v_id));
+ return v_id;
+end $$;
+create function public.set_receipt_intake_status(p_org uuid,p_review uuid,p_status text)
+returns void language plpgsql security definer set search_path=''
+as $$
+begin
+ if not public.has_org_write(p_org) then raise exception 'Not authorized';end if;
+ if p_status not in ('reviewed','rejected') then raise exception 'Invalid review status';end if;
+ update public.receipt_intake_reviews set status=p_status,reviewed_by=auth.uid(),reviewed_at=now()
+ where organization_id=p_org and id=p_review and status='needs_review';
+ if not found then raise exception 'Review not found or already processed';end if;
+ perform private.write_audit(p_org,'receipt.intake_reviewed','receipt_intake',p_review,
+  jsonb_build_object('status',p_status));
+end $$;
+revoke all on function public.save_receipt_geofence(uuid,uuid,text,double precision,double precision,integer,integer,boolean),
+ public.delete_receipt_geofence(uuid,uuid),
+ public.submit_receipt_intake(uuid,uuid,text,uuid),
+ public.set_receipt_intake_status(uuid,uuid,text) from public,anon;
+grant execute on function public.save_receipt_geofence(uuid,uuid,text,double precision,double precision,integer,integer,boolean),
+ public.delete_receipt_geofence(uuid,uuid),
+ public.submit_receipt_intake(uuid,uuid,text,uuid),
+ public.set_receipt_intake_status(uuid,uuid,text) to authenticated;
+ then v_total::numeric else null end)
  on conflict(organization_id,receipt_id) do nothing returning id into v_id;
  if v_id is null then
   select id into v_id from public.receipt_intake_reviews
