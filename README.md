@@ -23,6 +23,12 @@ See the [architecture](docs/ARCHITECTURE.md) and [operational readiness](docs/MI
 
 Platform superadmins can provision organizations for already verified user accounts through a service-authorized operator interface. Platform privileges are separate from tenant finance permissions, and **must be bootstrapped privately in Supabase SQL Editor**, not granted by client signup. Organization owners and administrators can create secure one-time invitation links independently of the Resend email provider. Additional members still require an active subscription with available seats. See [platform administration and bootstrap](docs/PLATFORM_ADMINISTRATION.md) for setup and [Milestone 4 administration](docs/MILESTONE_4.md) for the underlying tenant roles.
 
+## Mobile receipt capture (new, staging only)
+
+The `apps/mobile` Expo React Native app targets iOS and Android. Organization owners configure receipt reminder locations from **Receipt locations** in the web workspace. Members can enable geofence notifications on their devices; tapping a local reminder opens receipt photo capture. Uploaded photos use the existing private receipt API and consent-required Google Vision OCR. OCR results are queued as unposted **expense** or **incoming payment evidence** for review. The app does **not** automatically settle invoices or post expenses to the general ledger.
+
+See [Mobile receipt capture deployment and operational caveats](docs/MOBILE_RECEIPT_CAPTURE.md). The `mobile.yml` workflow validates pull requests and provides opt-in EAS builds and App Store Connect / Google Play submissions. Real device geofence testing, EAS credentials, store setup, Supabase staging migrations, and privacy disclosures are outstanding.
+
 ## Development setup
 
 1. Create a Supabase project intended for development only.
